@@ -1,0 +1,44 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Cloudflare Workers 代理服务目录结构
+
+项目分为客户端和服务端两部分，采用以下目录结构：
+
+```
+cloudflare-workers-proxy/
+├── client/              # 客户端Worker代码
+│   ├── index.js         # 主入口文件
+│   ├── config.js        # 客户端配置处理
+│   ├── cache.js         # 缓存管理逻辑
+│   └── error.js         # 错误处理模块
+│
+├── server/              # 服务端Worker代码
+│   ├── index.js         # 主入口文件
+│   ├── config.js        # 服务配置管理
+│   ├── auth.js          # 认证授权逻辑
+│   ├── admin/           # 管理界面相关
+│   │   ├── index.js     # 管理界面入口
+│   │   ├── ui.js        # UI组件
+│   │   └── api.js       # 管理API
+│   └── crypto.js        # 加密解密工具
+│
+└── cloudflare-workers-proxy.md  # 项目文档
+```
+
+## 客户端结构说明
+
+- `client/index.js`: 主入口文件，处理请求转发
+- `client/config.js`: 处理与服务端通信获取配置
+- `client/cache.js`: 管理配置缓存，实现回退策略
+- `client/error.js`: 统一错误处理和日志记录
+
+## 服务端结构说明
+
+- `server/index.js`: 主入口文件，路由请求处理
+- `server/config.js`: 配置存储和检索逻辑
+- `server/auth.js`: 实现认证和授权机制
+- `server/admin/`: 管理界面相关代码
+- `server/crypto.js`: 实现配置数据的加密和解密

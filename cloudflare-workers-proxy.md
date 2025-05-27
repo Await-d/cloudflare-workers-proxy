@@ -115,9 +115,9 @@ async function handleRequest(request) {
 }
 ```
 
-### 服务端实现
+### 服务端实现（Cloudflare Worker）
 
-服务端可以使用Node.js或任何后端框架实现，提供以下API：
+服务端使用Cloudflare Worker实现，提供以下API：
 
 1. **配置获取API**：`GET /api/config`
    - 需要认证头：`Authorization: Bearer {SECRET_KEY}`
@@ -127,24 +127,55 @@ async function handleRequest(request) {
 2. **管理界面**：提供Web界面用于管理各服务的代理地址
 
 ```javascript
-// 服务端API示例（Express.js）
-app.get('/api/config', authenticateRequest, (req, res) => {
-  const serviceKey = req.headers['x-service-key']
+// 服务端Worker代码示例
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
+
+async function handleRequest(request) {
+  const url = new URL(request.url)
   
-  // 从数据库获取指定服务的配置
-  const serviceConfig = getServiceConfig(serviceKey)
-  
-  if (!serviceConfig) {
-    return res.status(404).json({error: '服务配置不存在'})
+  // 提供管理界面
+  if (url.pathname === '/' || url.pathname.startsWith('/admin')) {
+    return handleAdminInterface(request)
   }
   
-  // 返回解密后的配置
-  res.json({
-    proxyURL: decryptURL(serviceConfig.encryptedProxyURL),
-    updateInterval: serviceConfig.updateInterval,
-    // 其他配置...
-  })
-})
+  // API端点 - 获取配置
+  if (url.pathname === '/api/config') {
+    // 验证请求
+    const authorization = request.headers.get('Authorization')
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      return new Response('未授权', { status: 401 })
+    }
+    
+    const secretKey = authorization.split('Bearer ')[1]
+    if (!SECRET_KEYS.includes(secretKey)) {
+      return new Response('无效的访问密钥', { status: 403 })
+    }
+    
+    const serviceKey = request.headers.get('X-Service-Key')
+    if (!serviceKey) {
+      return new Response('缺少服务标识', { status: 400 })
+    }
+    
+    // 从KV存储中获取服务配置
+    const serviceConfig = await SERVICE_CONFIGS.get(serviceKey, { type: 'json' })
+    if (!serviceConfig) {
+      return new Response('服务配置不存在', { status: 404 })
+    }
+    
+    // 返回解密后的配置
+    return new Response(JSON.stringify({
+      proxyURL: decryptURL(serviceConfig.encryptedProxyURL),
+      updateInterval: serviceConfig.updateInterval,
+      // 其他配置...
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  
+  return new Response('Not Found', { status: 404 })
+}
 ```
 
 ## 部署步骤
@@ -162,10 +193,14 @@ app.get('/api/config', authenticateRequest, (req, res) => {
 
 ### 服务端部署
 
-1. 在支持Node.js的服务器或云平台部署服务端代码
-2. 配置数据库用于存储服务配置
-3. 设置HTTPS证书确保安全连接
-4. 配置管理员账户用于访问管理界面
+1. 在Cloudflare Dashboard创建新的Worker
+2. 上传服务端代码
+3. 配置环境变量：
+   - `SECRET_KEYS`: 允许的访问密钥列表
+   - `ADMIN_KEY`: 管理界面访问密钥
+4. 创建KV命名空间用于存储服务配置（如`SERVICE_CONFIGS`）
+5. 创建R2存储桶用于存储访问日志（可选）
+6. 部署Worker并设置自定义域名（可选）
 
 ## 安全考虑
 

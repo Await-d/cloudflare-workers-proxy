@@ -1,0 +1,79 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Cloudflare Workers 代理服务技术实现指南
+
+## 客户端实现
+
+客户端基于Cloudflare Worker实现，主要功能示例代码（[cloudflare-workers-proxy.md](mdc:cloudflare-workers-proxy.md)）：
+
+```javascript
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
+
+async function handleRequest(request) {
+  // 从环境变量读取配置
+  const SERVICE_CONFIG_URL = ENVIRONMENT.SERVICE_CONFIG_URL
+  const SECRET_KEY = ENVIRONMENT.SECRET_KEY
+  const SERVICE_KEY = ENVIRONMENT.SERVICE_KEY
+  
+  // 获取代理配置...
+  // 创建代理请求...
+  // 发送代理请求并返回响应...
+}
+```
+
+## 服务端实现
+
+服务端也使用Cloudflare Worker实现，主要功能示例代码（[cloudflare-workers-proxy.md](mdc:cloudflare-workers-proxy.md)）：
+
+```javascript
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
+
+async function handleRequest(request) {
+  const url = new URL(request.url)
+  
+  // 提供管理界面
+  if (url.pathname === '/' || url.pathname.startsWith('/admin')) {
+    return handleAdminInterface(request)
+  }
+  
+  // API端点 - 获取配置
+  if (url.pathname === '/api/config') {
+    // 验证请求...
+    // 从KV存储中获取服务配置...
+    // 返回解密后的配置...
+  }
+}
+```
+
+## 关键技术点
+
+### KV存储使用
+- 客户端：使用KV存储缓存代理配置
+- 服务端：使用KV存储持久化服务配置
+
+### 环境变量
+- 客户端：`SERVICE_CONFIG_URL`, `SECRET_KEY`, `SERVICE_KEY`
+- 服务端：`SECRET_KEYS`, `ADMIN_KEY`
+
+### 认证机制
+- 使用Bearer令牌认证
+- 密钥验证机制
+- 服务标识检查
+
+### 错误处理
+- 缓存回退策略
+- 错误状态码处理
+- 日志记录
+
+### 安全实践
+- 数据加密存储
+- HTTPS传输
+- 请求限流
+- 密钥轮换

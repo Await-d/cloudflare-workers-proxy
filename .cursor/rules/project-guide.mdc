@@ -1,0 +1,52 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Cloudflare Workers 代理服务项目指南
+
+## 项目概述
+
+本项目旨在利用Cloudflare Workers创建一个灵活的代理转发服务，包含客户端和服务端两个部分。系统允许用户通过服务端配置不同的代理地址，并使客户端能够动态读取这些配置进行代理转发。
+
+主要文档：[cloudflare-workers-proxy.md](mdc:cloudflare-workers-proxy.md)
+
+## 系统架构
+
+### 客户端组件
+- 基于Cloudflare Worker实现
+- 通过环境变量配置服务端地址和密钥
+- 动态代理转发功能
+- 配置自动更新机制
+- 错误处理与回退策略
+
+### 服务端组件
+- 同样基于Cloudflare Worker实现
+- 代理地址管理功能
+- 用户认证与授权机制
+- 管理界面
+- 安全措施
+
+## 部署指南
+
+### 客户端部署
+1. 在Cloudflare Dashboard创建新的Worker
+2. 上传客户端代码
+3. 配置环境变量（SERVICE_CONFIG_URL、SECRET_KEY、SERVICE_KEY）
+4. 创建KV命名空间用于缓存（PROXY_CACHE）
+5. 部署Worker并设置自定义域名（可选）
+
+### 服务端部署
+1. 在Cloudflare Dashboard创建新的Worker
+2. 上传服务端代码
+3. 配置环境变量（SECRET_KEYS、ADMIN_KEY）
+4. 创建KV命名空间用于存储服务配置（SERVICE_CONFIGS）
+5. 创建R2存储桶用于存储访问日志（可选）
+6. 部署Worker并设置自定义域名（可选）
+
+## 安全考虑
+- 所有密钥和代理URL都应加密存储
+- 客户端与服务端通信必须使用HTTPS
+- 实施请求限流防止DOS攻击
+- 定期轮换密钥增强安全性
+- 监控异常访问模式
