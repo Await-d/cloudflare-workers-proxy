@@ -25,6 +25,30 @@ export async function onRequest(context) {
         const url = new URL(request.url);
         const path = url.pathname;
 
+        // 动态处理URL参数，覆盖环境变量设置 (借鉴epeius项目)
+        if (url.searchParams.has('proxyip')) {
+            env.PROXY_URL = `http://${url.searchParams.get('proxyip')}`;
+            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+        }
+
+        if (url.searchParams.has('target')) {
+            env.PROXY_URL = url.searchParams.get('target');
+            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+        }
+
+        // 处理路径中的代理设置 (借鉴epeius项目)
+        if (path.startsWith('/proxyip=')) {
+            const proxyIP = path.split('/proxyip=')[1];
+            env.PROXY_URL = `http://${proxyIP}`;
+            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+        }
+
+        if (path.startsWith('/target=')) {
+            const target = path.split('/target=')[1];
+            env.PROXY_URL = target;
+            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+        }
+
         // 添加 CORS 头
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
@@ -94,7 +118,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-advanced-browser-simulation', // 版本标识
+        buildVersion: '2025-05-28-url-params-enhanced-strategies', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -353,6 +377,17 @@ async function handleProxyRequest(request, env, ctx) {
                 }
             },
             {
+                name: 'target_host_direct',
+                headers: () => {
+                    const headers = new Headers(browserHeaders);
+                    // 直接使用目标服务器的Host
+                    headers.set('Host', targetUrl.host);
+                    headers.set('Referer', `${targetUrl.protocol}//${targetUrl.host}/`);
+                    headers.set('Origin', `${targetUrl.protocol}//${targetUrl.host}`);
+                    return headers;
+                }
+            },
+            {
                 name: 'no_host',
                 headers: () => {
                     const headers = new Headers(browserHeaders);
@@ -381,6 +416,7 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('DNT', '1');
                     headers.set('Connection', 'keep-alive');
                     headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
@@ -392,6 +428,7 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Accept', '*/*');
                     headers.set('Accept-Encoding', 'gzip, deflate');
                     headers.set('Connection', 'keep-alive');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
@@ -403,15 +440,46 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Accept', '*/*');
                     headers.set('Accept-Encoding', 'identity');
                     headers.set('Connection', 'Keep-Alive');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
             {
-                name: 'target_host_direct',
+                name: 'cloudflare_bypass',
                 headers: () => {
                     const headers = new Headers();
-                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    // 伪装成来自CDN的请求
+                    headers.set('User-Agent', 'Mozilla/5.0 (compatible; CloudflareBot/1.0; +https://www.cloudflare.com/bot-management/)');
+                    headers.set('Accept', '*/*');
+                    headers.set('CF-RAY', '12345-ABC');
+                    headers.set('CF-Visitor', '{"scheme":"https"}');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'nginx_proxy',
+                headers: () => {
+                    const headers = new Headers();
+                    // 伪装成Nginx反向代理
+                    headers.set('User-Agent', 'nginx/1.18.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('X-Real-IP', '192.168.1.100');
+                    headers.set('X-Forwarded-For', '192.168.1.100');
+                    headers.set('X-Forwarded-Proto', 'https');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'mobile_safari',
+                headers: () => {
+                    const headers = new Headers();
+                    // 移动端Safari伪装
+                    headers.set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1');
                     headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
                     headers.set('Host', targetUrl.host);
                     return headers;
                 }
@@ -422,6 +490,7 @@ async function handleProxyRequest(request, env, ctx) {
                     const headers = new Headers();
                     // 只保留最基础的头部，不包含任何可能被识别为代理的头部
                     headers.set('Accept', 'text/html');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             }
@@ -847,6 +916,17 @@ async function handleDebugProxy(request, env, ctx) {
                 }
             },
             {
+                name: 'target_host_direct',
+                headers: () => {
+                    const headers = new Headers(browserHeaders);
+                    // 直接使用目标服务器的Host
+                    headers.set('Host', targetUrl.host);
+                    headers.set('Referer', `${targetUrl.protocol}//${targetUrl.host}/`);
+                    headers.set('Origin', `${targetUrl.protocol}//${targetUrl.host}`);
+                    return headers;
+                }
+            },
+            {
                 name: 'no_host',
                 headers: () => {
                     const headers = new Headers(browserHeaders);
@@ -875,6 +955,7 @@ async function handleDebugProxy(request, env, ctx) {
                     headers.set('DNT', '1');
                     headers.set('Connection', 'keep-alive');
                     headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
@@ -886,6 +967,7 @@ async function handleDebugProxy(request, env, ctx) {
                     headers.set('Accept', '*/*');
                     headers.set('Accept-Encoding', 'gzip, deflate');
                     headers.set('Connection', 'keep-alive');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
@@ -897,15 +979,46 @@ async function handleDebugProxy(request, env, ctx) {
                     headers.set('Accept', '*/*');
                     headers.set('Accept-Encoding', 'identity');
                     headers.set('Connection', 'Keep-Alive');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             },
             {
-                name: 'target_host_direct',
+                name: 'cloudflare_bypass',
                 headers: () => {
                     const headers = new Headers();
-                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    // 伪装成来自CDN的请求
+                    headers.set('User-Agent', 'Mozilla/5.0 (compatible; CloudflareBot/1.0; +https://www.cloudflare.com/bot-management/)');
+                    headers.set('Accept', '*/*');
+                    headers.set('CF-RAY', '12345-ABC');
+                    headers.set('CF-Visitor', '{"scheme":"https"}');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'nginx_proxy',
+                headers: () => {
+                    const headers = new Headers();
+                    // 伪装成Nginx反向代理
+                    headers.set('User-Agent', 'nginx/1.18.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('X-Real-IP', '192.168.1.100');
+                    headers.set('X-Forwarded-For', '192.168.1.100');
+                    headers.set('X-Forwarded-Proto', 'https');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'mobile_safari',
+                headers: () => {
+                    const headers = new Headers();
+                    // 移动端Safari伪装
+                    headers.set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1');
                     headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
                     headers.set('Host', targetUrl.host);
                     return headers;
                 }
@@ -916,6 +1029,7 @@ async function handleDebugProxy(request, env, ctx) {
                     const headers = new Headers();
                     // 只保留最基础的头部，不包含任何可能被识别为代理的头部
                     headers.set('Accept', 'text/html');
+                    headers.set('Host', targetUrl.host);
                     return headers;
                 }
             }
