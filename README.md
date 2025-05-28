@@ -53,6 +53,8 @@ cloudflare-workers-proxy/
 
 ## 🛠️ 快速部署
 
+> 💡 **零配置部署**：本项目支持完全通过环境变量配置，无需修改任何代码文件！详见 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
 ### 方法一：GitHub Actions 自动部署（推荐）
 
 1. **Fork 此仓库**到您的GitHub账户
@@ -65,23 +67,33 @@ cloudflare-workers-proxy/
    CLOUDFLARE_ACCOUNT_ID=你的Cloudflare账户ID
    ```
 
-3. **创建KV命名空间**：
+3. **推送代码**：
+   - Fork 仓库后直接推送到 GitHub
+   - GitHub Actions 自动部署到 Cloudflare Pages
+   - 无需修改任何配置文件
 
-   ```bash
-   wrangler kv:namespace create "SERVICE_CONFIGS"
-   ```
-
-4. **更新配置**：
-   - 在 `wrangler.toml` 中更新KV命名空间ID
-   - 推送代码到仓库，自动触发部署
-
-5. **设置环境变量**：
+4. **配置环境变量**：
    在Cloudflare Dashboard的Pages项目设置中添加：
 
+   **方式一：连接服务端（推荐）**
+
    ```
-   SECRET_KEYS=key1,key2,key3
-   ADMIN_KEY=your-admin-key
-   ENCRYPTION_KEY=your-encryption-key
+   SERVER_URL=https://your-server.workers.dev
+   SECRET_KEY=your-secret-key
+   SERVICE_KEY=your-service-key
+   ```
+
+   **方式二：直接代理配置**
+
+   ```
+   PROXY_URL=https://api.example.com
+   UPDATE_INTERVAL=3600
+   ```
+
+   **可选：KV缓存**
+
+   ```
+   PROXY_CACHE_KV_ID=your-kv-namespace-id
    ```
 
 ### 方法二：本地部署
@@ -157,7 +169,24 @@ curl -X POST https://your-domain.pages.dev/api/push-config \
 curl https://your-domain.pages.dev/proxy/api/data
 ```
 
-## ⚙️ 环境变量
+## ⚙️ 环境变量配置
+
+### 客户端环境变量
+
+| 变量名 | 类型 | 说明 | 示例值 |
+|--------|------|------|--------|
+| **方式一：服务端连接** | | | |
+| SERVER_URL | Variable | 服务端API地址 | <https://server.workers.dev> |
+| SECRET_KEY | Secret | 访问服务端的密钥 | your-secret-key |
+| SERVICE_KEY | Variable | 服务标识 | my-service |
+| **方式二：直接代理** | | | |
+| PROXY_URL | Variable | 代理目标地址 | <https://api.example.com> |
+| UPDATE_INTERVAL | Variable | 配置更新间隔（秒） | 3600 |
+| **可选配置** | | | |
+| DEBUG_MODE | Variable | 调试模式 | false |
+| PROXY_CACHE_KV_ID | Variable | KV命名空间ID | xxxx-xxxx-xxxx |
+
+### 服务端环境变量
 
 | 变量名 | 类型 | 说明 | 示例值 |
 |--------|------|------|--------|
@@ -165,7 +194,6 @@ curl https://your-domain.pages.dev/proxy/api/data
 | ADMIN_KEY | Secret | 管理员密钥 | admin-secret-key |
 | ENCRYPTION_KEY | Secret | 配置加密密钥 | encryption-secret-key |
 | MAX_REQUESTS_PER_MINUTE | Variable | 请求频率限制 | 60 |
-| DEBUG_MODE | Variable | 调试模式 | false |
 
 ## 🔧 高级配置
 

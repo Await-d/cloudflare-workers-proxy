@@ -198,8 +198,19 @@
             <h3>📋 配置方式</h3>
 
             <div class="config-option">
+                <h4>🔧 零配置部署</h4>
+                <p>本项目支持完全通过环境变量配置，无需修改任何代码文件！</p>
+                <ol style="text-align: left; margin: 1rem 0;">
+                    <li>Fork GitHub 仓库</li>
+                    <li>设置 Cloudflare API Token</li>
+                    <li>配置环境变量（见下方方式）</li>
+                    <li>推送代码自动部署</li>
+                </ol>
+            </div>
+
+            <div class="config-option">
                 <h4>方式一：从服务端获取配置（推荐）</h4>
-                <p>设置以下环境变量：</p>
+                <p>在 Cloudflare Pages 设置中添加：</p>
                 <div class="code">
                     SERVER_URL=https://your-server.workers.dev<br>
                     SECRET_KEY=your-secret-key<br>
@@ -209,7 +220,7 @@
 
             <div class="config-option">
                 <h4>方式二：直接配置代理地址</h4>
-                <p>设置以下环境变量：</p>
+                <p>在 Cloudflare Pages 设置中添加：</p>
                 <div class="code">
                     PROXY_URL=https://api.example.com<br>
                     UPDATE_INTERVAL=3600
@@ -217,10 +228,10 @@
             </div>
 
             <div class="config-option">
-                <h4>方式三：使用KV存储</h4>
-                <p>在KV命名空间中存储配置JSON：</p>
+                <h4>方式三：使用KV存储（可选）</h4>
+                <p>创建 KV 命名空间并添加 ID：</p>
                 <div class="code">
-                    {"proxyURL": "https://api.example.com", "updateInterval": 3600}
+                    PROXY_CACHE_KV_ID=your-kv-namespace-id
                 </div>
             </div>
         </div>

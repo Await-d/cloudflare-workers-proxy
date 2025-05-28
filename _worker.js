@@ -79,13 +79,22 @@ export default {
  */
 async function handleHealthCheck(request, env) {
     const config = await getServiceConfig(env);
+    const kvInfo = getKVInfo(env);
 
     return new Response(JSON.stringify({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
         service: 'cloudflare-workers-proxy-client',
-        config: config ? 'loaded' : 'not_configured'
+        config: config ? 'loaded' : 'not_configured',
+        configSource: getConfigSource(env),
+        kv: kvInfo.available ? 'available' : 'not_configured',
+        environment: {
+            hasServerUrl: !!env.SERVER_URL,
+            hasProxyUrl: !!env.PROXY_URL,
+            hasKV: kvInfo.available,
+            debugMode: env.DEBUG_MODE === 'true'
+        }
     }), {
         headers: {
             'Content-Type': 'application/json'
@@ -94,10 +103,41 @@ async function handleHealthCheck(request, env) {
 }
 
 /**
+ * 获取KV信息
+ */
+function getKVInfo(env) {
+    // 动态检查KV绑定
+    const kvBinding = env.PROXY_CACHE || null;
+    return {
+        available: !!kvBinding,
+        binding: kvBinding ? 'PROXY_CACHE' : null
+    };
+}
+
+/**
+ * 获取配置来源
+ */
+function getConfigSource(env) {
+    if (env.SERVER_URL && env.SECRET_KEY && env.SERVICE_KEY) {
+        return 'server_api';
+    }
+    if (env.PROXY_URL) {
+        return 'environment_variable';
+    }
+    const kvInfo = getKVInfo(env);
+    if (kvInfo.available) {
+        return 'kv_storage';
+    }
+    return 'not_configured';
+}
+
+/**
  * 处理首页请求
  */
 async function handleHomePage(request, env) {
     const config = await getServiceConfig(env);
+    const configSource = getConfigSource(env);
+    const kvInfo = getKVInfo(env);
 
     const html = `
 <!DOCTYPE html>
@@ -123,7 +163,7 @@ async function handleHomePage(request, env) {
             padding: 3rem;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             text-align: center;
-            max-width: 600px;
+            max-width: 700px;
         }
         h1 {
             color: #333;
@@ -151,6 +191,13 @@ async function handleHomePage(request, env) {
             margin: 2rem 0;
             text-align: left;
         }
+        .config-details {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
         .btn {
             display: inline-block;
             padding: 0.75rem 1.5rem;
@@ -172,16 +219,24 @@ async function handleHomePage(request, env) {
         
         <div class="status ${config ? 'configured' : 'not-configured'}">
             ${config ? 
-                `✅ 代理配置已加载<br>目标地址: ${config.proxyURL}` : 
+                `✅ 代理配置已加载<br>目标地址: ${config.proxyURL}<br>配置来源: ${getConfigSourceName(configSource)}` : 
                 '❌ 代理配置未设置'
             }
+        </div>
+        
+        <div class="config-details">
+            <strong>📊 配置状态:</strong><br>
+            • 服务端连接: ${env.SERVER_URL ? '✅ 已配置' : '❌ 未配置'}<br>
+            • 直接代理: ${env.PROXY_URL ? '✅ 已配置' : '❌ 未配置'}<br>
+            • KV存储: ${kvInfo.available ? '✅ 可用' : '❌ 未配置'}<br>
+            • 调试模式: ${env.DEBUG_MODE === 'true' ? '✅ 开启' : '❌ 关闭'}
         </div>
         
         <div class="info">
             <h3>📋 使用说明</h3>
             <p><strong>代理访问：</strong>所有发送到此域名的请求都会被代理转发到配置的目标地址</p>
             <p><strong>健康检查：</strong><code>/api/health</code></p>
-            <p><strong>配置方式：</strong>通过环境变量或从服务端获取</p>
+            <p><strong>配置方式：</strong>通过Pages环境变量配置，无需修改代码文件</p>
         </div>
         
         <div>
@@ -204,6 +259,19 @@ async function handleHomePage(request, env) {
 }
 
 /**
+ * 获取配置来源名称
+ */
+function getConfigSourceName(source) {
+    const names = {
+        'server_api': '服务端API',
+        'environment_variable': '环境变量',
+        'kv_storage': 'KV存储',
+        'not_configured': '未配置'
+    };
+    return names[source] || source;
+}
+
+/**
  * 处理代理请求（客户端功能）
  */
 async function handleProxyRequest(request, env, ctx) {
@@ -212,8 +280,15 @@ async function handleProxyRequest(request, env, ctx) {
     // 获取服务配置
     const config = await getServiceConfig(env);
     if (!config) {
-        return new Response('Service configuration not found. Please configure PROXY_URL or SERVER_URL environment variables.', {
-            status: 404
+        return new Response(JSON.stringify({
+            error: 'Service configuration not found',
+            message: 'Please configure one of the following: SERVER_URL+SECRET_KEY+SERVICE_KEY, PROXY_URL, or KV storage',
+            configSource: getConfigSource(env)
+        }), {
+            status: 404,
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
     }
 
@@ -248,8 +323,15 @@ async function handleProxyRequest(request, env, ctx) {
 
     } catch (error) {
         console.error('Proxy error:', error);
-        return new Response('Proxy Error: ' + error.message, {
-            status: 502
+        return new Response(JSON.stringify({
+            error: 'Proxy Error',
+            message: error.message,
+            target: config.proxyURL
+        }), {
+            status: 502,
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
     }
 }
@@ -271,20 +353,25 @@ async function getServiceConfig(env) {
 
                 if (response.ok) {
                     const config = await response.json();
+                    // 缓存到KV（如果可用）
+                    await cacheConfig(env, config);
                     return config;
                 }
             } catch (error) {
                 console.warn('Failed to fetch config from server:', error);
+                // 如果服务端获取失败，尝试从缓存获取
+                const cachedConfig = await getCachedConfig(env);
+                if (cachedConfig) {
+                    console.log('Using cached config due to server fetch failure');
+                    return cachedConfig;
+                }
             }
         }
 
         // 方式2: 从KV存储获取配置
-        const serviceKey = env.SERVICE_KEY || 'default';
-        if (env.PROXY_CACHE) {
-            const configData = await env.PROXY_CACHE.get(serviceKey);
-            if (configData) {
-                return JSON.parse(configData);
-            }
+        const kvConfig = await getKVConfig(env);
+        if (kvConfig) {
+            return kvConfig;
         }
 
         // 方式3: 直接从环境变量获取配置
@@ -301,4 +388,51 @@ async function getServiceConfig(env) {
         console.error('Failed to get service config:', error);
         return null;
     }
+}
+
+/**
+ * 从KV获取配置
+ */
+async function getKVConfig(env) {
+    try {
+        const kvInfo = getKVInfo(env);
+        if (!kvInfo.available) {
+            return null;
+        }
+
+        const serviceKey = env.SERVICE_KEY || 'default';
+        const configData = await env.PROXY_CACHE.get(serviceKey);
+        if (configData) {
+            return JSON.parse(configData);
+        }
+    } catch (error) {
+        console.warn('Failed to get config from KV:', error);
+    }
+    return null;
+}
+
+/**
+ * 缓存配置到KV
+ */
+async function cacheConfig(env, config) {
+    try {
+        const kvInfo = getKVInfo(env);
+        if (!kvInfo.available) {
+            return;
+        }
+
+        const serviceKey = env.SERVICE_KEY || 'default';
+        await env.PROXY_CACHE.put(serviceKey, JSON.stringify(config), {
+            expirationTtl: DEFAULT_CONFIG.cacheTTL
+        });
+    } catch (error) {
+        console.warn('Failed to cache config to KV:', error);
+    }
+}
+
+/**
+ * 获取缓存的配置
+ */
+async function getCachedConfig(env) {
+    return await getKVConfig(env);
 }

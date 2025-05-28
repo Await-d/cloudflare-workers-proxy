@@ -20,7 +20,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: cloudflare-workers-proxy
+          projectName: cloudflare-workers-proxy-client
           directory: ./
           # Optional: Enable Wrangler compatibility
-          wranglerVersion: '3' 
+          wranglerVersion: '3'
+          # 环境变量将通过 Cloudflare Dashboard Pages 设置页面配置
+          # 无需在此处设置，避免在代码中暴露敏感信息 
