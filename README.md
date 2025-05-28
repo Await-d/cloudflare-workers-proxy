@@ -53,7 +53,12 @@ cloudflare-workers-proxy/
 
 ## 🛠️ 快速部署
 
-> 💡 **零配置部署**：本项目支持完全通过环境变量配置，无需修改任何代码文件！详见 [DEPLOYMENT.md](./DEPLOYMENT.md)
+> 💡 **零配置部署**：本项目支持完全通过环境变量配置，无需修改任何代码文件！
+
+📋 **部署文档**：
+
+- [自动部署指南](./DEPLOYMENT.md) - GitHub Actions自动部署
+- [手动部署指南](./MANUAL_DEPLOY.md) - 解决内部错误的备选方案
 
 ### 方法一：GitHub Actions 自动部署（推荐）
 
