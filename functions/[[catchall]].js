@@ -736,6 +736,11 @@ async function handleProxyRequest(request, env, ctx) {
 
         // 尝试不同的绕过策略
         for (const strategy of bypassStrategies) {
+            // 在尝试每个策略前加入随机延迟
+            const randomDelay = Math.floor(Math.random() * 1500) + 500; // 500ms to 2000ms
+            console.log(`等待 ${randomDelay}ms 后尝试策略: ${strategy.name}`);
+            await new Promise(resolve => setTimeout(resolve, randomDelay));
+
             try {
                 const strategyResult = strategy.createRequest();
 
