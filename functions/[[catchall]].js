@@ -91,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-remove-host-header', // 版本标识
+        buildVersion: '2025-05-28-minimal-proxy', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -308,55 +308,31 @@ async function handleProxyRequest(request, env, ctx) {
         targetUrl.pathname = url.pathname;
         targetUrl.search = url.search;
 
-        // 复制原始请求头
+        // 复制原始请求头，但做最少的修改
         const modifiedHeaders = new Headers(request.headers);
 
-        // 处理Host头 - 对于IP访问的特殊处理
+        // 只做必要的URL和Host修改
         const targetHost = targetUrl.host;
 
-        // 如果目标是IP地址，尝试不同的Host头策略
+        // 对于IP地址的特殊处理 - 尝试最简单的方法
         if (/^\d+\.\d+\.\d+\.\d+/.test(targetUrl.hostname)) {
-            // 对于IP地址，可以尝试以下策略：
-            // 1. 保持原始Host头（用户访问的域名）
-            // 2. 或者移除Host头让服务器使用默认
-            // 3. 或者设置为IP:port
-
-            // 策略1：保持原始域名作为Host头（适用于反向代理场景）
-            // modifiedHeaders.set('Host', url.host);
-
-            // 策略2：设置为目标IP和端口
-            // modifiedHeaders.set('Host', targetHost);
-
-            // 策略3：移除Host头（某些情况下有效）
+            // 完全移除Host头，让fetch使用目标URL的host
             modifiedHeaders.delete('Host');
         } else {
             // 对于域名，设置正确的Host头
             modifiedHeaders.set('Host', targetHost);
         }
 
-        // 添加一些可能有用的头部
+        // 只添加最基本的转发头
         modifiedHeaders.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '');
         modifiedHeaders.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
         modifiedHeaders.set('X-Forwarded-Host', url.host);
 
-        // 添加标准浏览器头部
-        if (!modifiedHeaders.has('User-Agent')) {
-            modifiedHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        }
-        if (!modifiedHeaders.has('Accept')) {
-            modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8');
-        }
-        if (!modifiedHeaders.has('Accept-Language')) {
-            modifiedHeaders.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
-        }
-        if (!modifiedHeaders.has('Accept-Encoding')) {
-            modifiedHeaders.set('Accept-Encoding', 'gzip, deflate');
-        }
-
-        // 移除可能导致问题的头部
+        // 移除Cloudflare特有的头部
         modifiedHeaders.delete('cf-ray');
         modifiedHeaders.delete('cf-ipcountry');
         modifiedHeaders.delete('cf-visitor');
+        modifiedHeaders.delete('cf-connecting-ip');
 
         // 创建新的请求
         const modifiedRequest = new Request(targetUrl.toString(), {
