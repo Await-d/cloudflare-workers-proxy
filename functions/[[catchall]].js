@@ -520,146 +520,211 @@ async function processProxyResponse(response, originalRequest, targetUrl, env) {
  * 处理HTML响应 - 重写URL和注入代理脚本
  */
 async function processHtmlResponse(response, originalRequest, targetUrl, responseHeaders, env) {
-    let html = await response.text();
-    const proxyUrl = new URL(originalRequest.url);
-    const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
+    try {
+        let html = await response.text();
+        const proxyUrl = new URL(originalRequest.url);
+        const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
 
-    // URL重写规则
-    const targetBase = `${targetUrl.protocol}//${targetUrl.host}`;
+        // URL重写规则
+        const targetBase = `${targetUrl.protocol}//${targetUrl.host}`;
 
-    // 重写绝对URL
-    html = html.replace(
-        new RegExp(`https?://${escapeRegex(targetUrl.host)}`, 'gi'),
-        baseUrl
-    );
-
-    // 重写相对URL
-    html = html.replace(
-        /(?:href|src|action)=["']([^"']+)["']/gi,
-        (match, url) => {
-            if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('mailto:')) {
-                return match;
-            }
-
-            // 处理相对路径
-            let newUrl = url;
-            if (url.startsWith('/')) {
-                newUrl = baseUrl + url;
-            } else if (!url.startsWith('#')) {
-                // 相对路径，需要基于当前路径计算
-                const currentPath = new URL(originalRequest.url).pathname;
-                const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
-                newUrl = baseUrl + basePath + url;
-            }
-
-            return match.replace(url, newUrl);
+        // 重写绝对URL
+        try {
+            html = html.replace(
+                new RegExp(`https?://${escapeRegex(targetUrl.host)}`, 'gi'),
+                baseUrl
+            );
+        } catch (error) {
+            console.warn('Failed to rewrite absolute URLs:', error);
         }
-    );
 
-    // 注入代理增强脚本
-    const proxyScript = `
-    <script>
-    (function() {
-        // 拦截和重写fetch请求
-        const originalFetch = window.fetch;
-        window.fetch = function(url, options = {}) {
-            if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
-                if (url.startsWith('/')) {
-                    url = '${baseUrl}' + url;
-                } else {
-                    const currentPath = window.location.pathname;
-                    const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
-                    url = '${baseUrl}' + basePath + url;
+        // 重写相对URL
+        try {
+            html = html.replace(
+                /(?:href|src|action)=["']([^"']+)["']/gi,
+                (match, url) => {
+                    if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('mailto:')) {
+                        return match;
+                    }
+
+                    // 处理相对路径
+                    let newUrl = url;
+                    if (url.startsWith('/')) {
+                        newUrl = baseUrl + url;
+                    } else if (!url.startsWith('#')) {
+                        // 相对路径，需要基于当前路径计算
+                        const currentPath = new URL(originalRequest.url).pathname;
+                        const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                        newUrl = baseUrl + basePath + url;
+                    }
+
+                    return match.replace(url, newUrl);
                 }
-            }
-            return originalFetch.call(this, url, options);
-        };
-        
-        // 拦截XMLHttpRequest
-        const originalXHROpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, ...args) {
-            if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
-                if (url.startsWith('/')) {
-                    url = '${baseUrl}' + url;
-                } else {
-                    const currentPath = window.location.pathname;
-                    const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
-                    url = '${baseUrl}' + basePath + url;
-                }
-            }
-            return originalXHROpen.call(this, method, url, ...args);
-        };
-        
-        // 修复window.location
-        if (window.location.host !== '${targetUrl.host}') {
-            Object.defineProperty(window, 'location', {
-                value: {
-                    ...window.location,
-                    host: '${targetUrl.host}',
-                    hostname: '${targetUrl.hostname}',
-                    origin: '${targetBase}',
-                    protocol: '${targetUrl.protocol}',
-                    port: '${targetUrl.port || (targetUrl.protocol === 'https:' ? '443' : '80')}'
-                },
-                writable: false
-            });
+            );
+        } catch (error) {
+            console.warn('Failed to rewrite relative URLs:', error);
         }
-    })();
-    </script>
-    `;
 
-    // 在</head>之前插入脚本
-    if (html.includes('</head>')) {
-        html = html.replace('</head>', proxyScript + '\n</head>');
-    } else if (html.includes('<head>')) {
-        html = html.replace('<head>', '<head>\n' + proxyScript);
-    } else {
-        html = proxyScript + '\n' + html;
+        // 注入代理增强脚本
+        const proxyScript = `
+        <script>
+        (function() {
+            try {
+                // 拦截和重写fetch请求
+                const originalFetch = window.fetch;
+                window.fetch = function(url, options = {}) {
+                    if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
+                        if (url.startsWith('/')) {
+                            url = '${baseUrl}' + url;
+                        } else {
+                            const currentPath = window.location.pathname;
+                            const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                            url = '${baseUrl}' + basePath + url;
+                        }
+                    }
+                    return originalFetch.call(this, url, options);
+                };
+                
+                // 拦截XMLHttpRequest
+                const originalXHROpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                    if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
+                        if (url.startsWith('/')) {
+                            url = '${baseUrl}' + url;
+                        } else {
+                            const currentPath = window.location.pathname;
+                            const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                            url = '${baseUrl}' + basePath + url;
+                        }
+                    }
+                    return originalXHROpen.call(this, method, url, ...args);
+                };
+                
+                // 修复window.location
+                if (window.location.host !== '${targetUrl.host}') {
+                    try {
+                        Object.defineProperty(window, 'location', {
+                            value: {
+                                ...window.location,
+                                host: '${targetUrl.host}',
+                                hostname: '${targetUrl.hostname}',
+                                origin: '${targetBase}',
+                                protocol: '${targetUrl.protocol}',
+                                port: '${targetUrl.port || (targetUrl.protocol === 'https:' ? '443' : '80')}'
+                            },
+                            writable: false
+                        });
+                    } catch (e) {
+                        console.warn('Could not override window.location:', e);
+                    }
+                }
+            } catch (e) {
+                console.warn('Proxy script error:', e);
+            }
+        })();
+        </script>
+        `;
+
+        // 在</head>之前插入脚本
+        try {
+            if (html.includes('</head>')) {
+                html = html.replace('</head>', proxyScript + '\n</head>');
+            } else if (html.includes('<head>')) {
+                html = html.replace('<head>', '<head>\n' + proxyScript);
+            } else {
+                html = proxyScript + '\n' + html;
+            }
+        } catch (error) {
+            console.warn('Failed to inject proxy script:', error);
+        }
+
+        responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
+
+        return new Response(html, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+
+    } catch (error) {
+        console.error('HTML processing error:', error);
+
+        // 如果HTML处理失败，返回原始响应（但注意response.body可能已被消耗）
+        // 创建一个错误页面
+        const errorHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>代理处理错误</title>
+        </head>
+        <body>
+            <h1>代理处理错误</h1>
+            <p>处理HTML内容时发生错误: ${error.message}</p>
+            <p>请稍后重试或联系管理员。</p>
+        </body>
+        </html>
+        `;
+
+        responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
+
+        return new Response(errorHtml, {
+            status: 502,
+            statusText: 'Proxy Processing Error',
+            headers: responseHeaders
+        });
     }
-
-    responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
-
-    return new Response(html, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders
-    });
 }
 
 /**
  * 处理CSS响应 - 重写URL引用
  */
 async function processCssResponse(response, originalRequest, targetUrl, responseHeaders) {
-    let css = await response.text();
-    const proxyUrl = new URL(originalRequest.url);
-    const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
+    try {
+        let css = await response.text();
+        const proxyUrl = new URL(originalRequest.url);
+        const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
 
-    // 重写CSS中的URL引用
-    css = css.replace(
-        /url\(['"]?([^'"）]+)['"]?\)/gi,
-        (match, url) => {
-            if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:')) {
-                return match;
-            }
+        // 重写CSS中的URL引用
+        try {
+            css = css.replace(
+                /url\(['"]?([^'"）]+)['"]?\)/gi,
+                (match, url) => {
+                    if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:')) {
+                        return match;
+                    }
 
-            let newUrl = url;
-            if (url.startsWith('/')) {
-                newUrl = baseUrl + url;
-            } else {
-                const currentPath = new URL(originalRequest.url).pathname;
-                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-                newUrl = baseUrl + basePath + url;
-            }
+                    let newUrl = url;
+                    if (url.startsWith('/')) {
+                        newUrl = baseUrl + url;
+                    } else {
+                        const currentPath = new URL(originalRequest.url).pathname;
+                        const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                        newUrl = baseUrl + basePath + url;
+                    }
 
-            return `url('${newUrl}')`;
+                    return `url('${newUrl}')`;
+                }
+            );
+        } catch (error) {
+            console.warn('Failed to rewrite CSS URLs:', error);
         }
-    );
 
-    return new Response(css, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders
-    });
+        return new Response(css, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+
+    } catch (error) {
+        console.error('CSS processing error:', error);
+
+        // 如果CSS处理失败，返回原始响应
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+    }
 }
 
 /**
