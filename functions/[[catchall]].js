@@ -118,7 +118,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-url-params-enhanced-strategies', // 版本标识
+        buildVersion: '2025-05-28-advanced-anti-detection-20-strategies', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -494,6 +494,119 @@ async function handleProxyRequest(request, env, ctx) {
                     const headers = new Headers();
                     // 只保留最基础的头部，不包含任何可能被识别为代理的头部
                     headers.set('Accept', 'text/html');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'direct_ip_access',
+                headers: () => {
+                    const headers = new Headers();
+                    // 尝试直接IP访问，不设置任何虚拟主机头
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'en-US,en;q=0.5');
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Pragma', 'no-cache');
+                    // 不设置Host头，让服务器直接处理IP访问
+                    return headers;
+                }
+            },
+            {
+                name: 'legacy_browser',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟老版本浏览器
+                    headers.set('User-Agent', 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,*/*');
+                    headers.set('Accept-Language', 'en-us');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'api_client',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟API客户端访问
+                    headers.set('User-Agent', 'okhttp/4.9.0');
+                    headers.set('Accept', 'application/json, text/plain, */*');
+                    headers.set('Content-Type', 'application/json');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'postman_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟Postman客户端
+                    headers.set('User-Agent', 'PostmanRuntime/7.28.4');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Postman-Token', '12345678-1234-1234-1234-123456789012');
+                    return headers;
+                }
+            },
+            {
+                name: 'health_check',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟健康检查请求
+                    headers.set('User-Agent', 'HealthCheck/1.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Health-Check', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'internal_service',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟内部服务调用
+                    headers.set('User-Agent', 'InternalService/1.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Internal-Request', 'true');
+                    headers.set('X-Service-Name', 'proxy-gateway');
+                    return headers;
+                }
+            },
+            {
+                name: 'load_balancer',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟负载均衡器请求
+                    headers.set('User-Agent', 'HAProxy/2.4');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Forwarded-For', '10.0.0.1');
+                    headers.set('X-Real-IP', '10.0.0.1');
+                    headers.set('X-Forwarded-Proto', 'https');
+                    headers.set('X-Load-Balancer', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'monitoring_agent',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟监控代理
+                    headers.set('User-Agent', 'Prometheus/2.30.0');
+                    headers.set('Accept', 'text/plain');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Prometheus-Scrape', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'raw_request',
+                headers: () => {
+                    const headers = new Headers();
+                    // 最原始的HTTP请求
                     headers.set('Host', targetUrl.host);
                     return headers;
                 }
@@ -1048,6 +1161,119 @@ async function handleDebugProxy(request, env, ctx) {
                     const headers = new Headers();
                     // 只保留最基础的头部，不包含任何可能被识别为代理的头部
                     headers.set('Accept', 'text/html');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'direct_ip_access',
+                headers: () => {
+                    const headers = new Headers();
+                    // 尝试直接IP访问，不设置任何虚拟主机头
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'en-US,en;q=0.5');
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Pragma', 'no-cache');
+                    // 不设置Host头，让服务器直接处理IP访问
+                    return headers;
+                }
+            },
+            {
+                name: 'legacy_browser',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟老版本浏览器
+                    headers.set('User-Agent', 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,*/*');
+                    headers.set('Accept-Language', 'en-us');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'api_client',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟API客户端访问
+                    headers.set('User-Agent', 'okhttp/4.9.0');
+                    headers.set('Accept', 'application/json, text/plain, */*');
+                    headers.set('Content-Type', 'application/json');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'postman_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟Postman客户端
+                    headers.set('User-Agent', 'PostmanRuntime/7.28.4');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Postman-Token', '12345678-1234-1234-1234-123456789012');
+                    return headers;
+                }
+            },
+            {
+                name: 'health_check',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟健康检查请求
+                    headers.set('User-Agent', 'HealthCheck/1.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Health-Check', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'internal_service',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟内部服务调用
+                    headers.set('User-Agent', 'InternalService/1.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Internal-Request', 'true');
+                    headers.set('X-Service-Name', 'proxy-gateway');
+                    return headers;
+                }
+            },
+            {
+                name: 'load_balancer',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟负载均衡器请求
+                    headers.set('User-Agent', 'HAProxy/2.4');
+                    headers.set('Accept', '*/*');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Forwarded-For', '10.0.0.1');
+                    headers.set('X-Real-IP', '10.0.0.1');
+                    headers.set('X-Forwarded-Proto', 'https');
+                    headers.set('X-Load-Balancer', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'monitoring_agent',
+                headers: () => {
+                    const headers = new Headers();
+                    // 模拟监控代理
+                    headers.set('User-Agent', 'Prometheus/2.30.0');
+                    headers.set('Accept', 'text/plain');
+                    headers.set('Host', targetUrl.host);
+                    headers.set('X-Prometheus-Scrape', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'raw_request',
+                headers: () => {
+                    const headers = new Headers();
+                    // 最原始的HTTP请求
                     headers.set('Host', targetUrl.host);
                     return headers;
                 }
