@@ -15,64 +15,67 @@ const DEFAULT_CONFIG = {
 /**
  * 主入口函数 - Cloudflare Pages Functions格式
  */
-export default {
-    async fetch(request, env, ctx) {
-        try {
-            const url = new URL(request.url);
-            const path = url.pathname;
+export async function onRequest(context) {
+    const {
+        request,
+        env,
+        ctx
+    } = context;
+    try {
+        const url = new URL(request.url);
+        const path = url.pathname;
 
-            // 添加 CORS 头
-            const corsHeaders = {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Service-Key',
-                'Access-Control-Max-Age': '86400',
-            };
+        // 添加 CORS 头
+        const corsHeaders = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Service-Key',
+            'Access-Control-Max-Age': '86400',
+        };
 
-            // 处理预检请求
-            if (request.method === 'OPTIONS') {
-                return new Response(null, {
-                    status: 204,
-                    headers: corsHeaders
-                });
-            }
-
-            let response;
-
-            // 路由分发
-            if (path.startsWith('/api/health')) {
-                // 健康检查
-                response = await handleHealthCheck(request, env);
-            } else if (path === '/' || path === '') {
-                // 首页显示项目信息
-                response = await handleHomePage(request, env);
-            } else {
-                // 所有其他请求都进行代理转发
-                response = await handleProxyRequest(request, env, ctx);
-            }
-
-            // 添加CORS头到响应
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                response.headers.set(key, value);
-            });
-
-            return response;
-
-        } catch (error) {
-            console.error('Worker error:', error);
-            return new Response(JSON.stringify({
-                error: 'Internal Server Error',
-                message: error.message
-            }), {
-                status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
+        // 处理预检请求
+        if (request.method === 'OPTIONS') {
+            return new Response(null, {
+                status: 204,
+                headers: corsHeaders
             });
         }
+
+        let response;
+
+        // 路由分发
+        if (path.startsWith('/api/health')) {
+            // 健康检查
+            response = await handleHealthCheck(request, env);
+        } else if (path === '/' || path === '') {
+            // 首页显示项目信息
+            response = await handleHomePage(request, env);
+        } else {
+            // 所有其他请求都进行代理转发
+            response = await handleProxyRequest(request, env, ctx);
+        }
+
+        // 添加CORS头到响应
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+            response.headers.set(key, value);
+        });
+
+        return response;
+
+    } catch (error) {
+        console.error('Worker error:', error);
+        return new Response(JSON.stringify({
+            error: 'Internal Server Error',
+            message: error.message
+        }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
     }
-};
+}
 
 /**
  * 处理健康检查

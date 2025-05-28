@@ -100,11 +100,12 @@ PROXY_CACHE_KV_PREVIEW_ID=your-preview-kv-id
 ## 🎉 优势
 
 - ✅ **完全零配置**：移除所有wrangler.toml文件，避免配置冲突
+- ✅ **标准Pages结构**：使用functions目录，符合Pages Functions规范
 - ✅ **安全性**：敏感信息不会出现在代码中
 - ✅ **灵活性**：支持多种配置方式
 - ✅ **易于维护**：配置集中管理
 - ✅ **自动部署**：GitHub Actions 自动化
-- ✅ **避免冲突**：Pages自动检测Functions，无需手动配置
+- ✅ **自动检测**：Pages自动检测functions目录
 
 ## ❓ 常见问题
 
