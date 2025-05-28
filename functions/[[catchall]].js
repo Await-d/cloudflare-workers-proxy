@@ -367,6 +367,84 @@ async function handleProxyRequest(request, env, ctx) {
                 }
             },
             {
+                name: 'session_warmup',
+                createRequest: async () => {
+                    const headers = new Headers();
+                    // 多步骤访问：先访问根路径预热连接
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+                    headers.set('Cache-Control', 'max-age=0');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Sec-Fetch-User', '?1');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    // 创建看起来真实的会话ID
+                    headers.set('Cookie', `PHPSESSID=${generateSessionId()}; cf_clearance=${generateCfClearance()}`);
+                    return headers;
+                }
+            },
+            {
+                name: 'protocol_downgrade',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 使用HTTP/1.0协议特征
+                    headers.set('User-Agent', 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)');
+                    headers.set('Accept', 'image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, */*');
+                    headers.set('Accept-Language', 'en-us');
+                    headers.set('Connection', 'Keep-Alive');
+                    headers.set('Pragma', 'no-cache');
+                    return headers;
+                }
+            },
+            {
+                name: 'bot_simulation',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 模拟搜索引擎爬虫
+                    headers.set('User-Agent', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Language', 'en');
+                    headers.set('From', 'googlebot@google.com');
+                    return headers;
+                }
+            },
+            {
+                name: 'edge_case_exploit',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 利用边缘情况：非标准但有效的头部组合
+                    headers.set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html');
+                    headers.set('Accept-Encoding', ''); // 空的Accept-Encoding
+                    headers.set('Connection', 'close');
+                    headers.set('Cache-Control', 'no-store');
+                    headers.set('Pragma', 'no-cache');
+                    // 添加一些混淆的头部
+                    headers.set('X-Forwarded-Host', 'localhost');
+                    headers.set('X-Original-URL', '/');
+                    return headers;
+                }
+            },
+            {
+                name: 'cdn_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 伪装成CDN回源请求
+                    headers.set('User-Agent', 'Amazon CloudFront');
+                    headers.set('Accept', '*/*');
+                    headers.set('Via', '1.1 ' + generateRandomCloudFrontId() + '.cloudfront.net (CloudFront)');
+                    headers.set('X-Amz-Cf-Id', generateRandomCloudFrontId());
+                    headers.set('X-Forwarded-For', generateRandomIP());
+                    headers.set('X-Forwarded-Proto', 'https');
+                    headers.set('X-Forwarded-Port', '443');
+                    headers.set('CF-Ray', generateCfRay());
+                    headers.set('CF-Visitor', '{"scheme":"https"}');
+                    return headers;
+                }
+            },
+            {
                 name: 'localhost_bypass',
                 createRequest: () => {
                     const headers = new Headers();
@@ -406,6 +484,19 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('X-Forwarded-For', '10.0.0.1');
                     headers.set('X-Real-IP', '10.0.0.1');
                     headers.set('X-Nginx-Proxy', 'true');
+                    return headers;
+                }
+            },
+            {
+                name: 'timing_attack',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 使用特定时间间隔的请求模式
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9');
+                    headers.set('If-Modified-Since', new Date(Date.now() - 3600000).toUTCString());
+                    headers.set('If-None-Match', '"' + Math.random().toString(36) + '"');
                     return headers;
                 }
             },
@@ -1540,4 +1631,47 @@ async function handleDebugDirect(request, env) {
             'Content-Type': 'application/json'
         }
     });
+}
+
+// 生成随机会话ID
+function generateSessionId() {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// 生成CF Clearance token
+function generateCfClearance() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-';
+    let result = '';
+    for (let i = 0; i < 43; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// 生成随机CloudFront ID
+function generateRandomCloudFrontId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 14; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// 生成随机IP
+function generateRandomIP() {
+    return Math.floor(Math.random() * 255) + '.' +
+        Math.floor(Math.random() * 255) + '.' +
+        Math.floor(Math.random() * 255) + '.' +
+        Math.floor(Math.random() * 255);
+}
+
+// 生成CF Ray ID
+function generateCfRay() {
+    const chars = '0123456789abcdef';
+    let result = '';
+    for (let i = 0; i < 16; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result + '-LAX';
 }
