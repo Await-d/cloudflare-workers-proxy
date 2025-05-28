@@ -92,6 +92,9 @@ export async function onRequest(context) {
         } else if (path === '/api/test-bypass') {
             // 测试最新绕过策略
             response = await handleTestBypass(request, env);
+        } else if (path === '/api/advanced-bypass') {
+            // 高级绕过技术测试，包括端口扫描和子域名发现
+            response = await handleAdvancedBypassTest(request, env);
         } else {
             // 所有其他请求都进行代理转发（包括根路径）
             response = await handleProxyRequest(request, env, ctx);
@@ -1942,6 +1945,285 @@ async function handleTestBypass(request, env) {
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
+            }
+        });
+    }
+}
+
+/**
+ * 测试多种高级绕过技术包括端口扫描
+ */
+async function handleAdvancedBypassTest(request, env) {
+    try {
+        const config = await getServiceConfig(env);
+        if (!config) {
+            return new Response('配置未找到', {
+                status: 500
+            });
+        }
+
+        const targetUrl = new URL(config.proxyURL);
+        const targetHost = targetUrl.hostname;
+        const targetPort = targetUrl.port || (targetUrl.protocol === 'https:' ? '443' : '80');
+
+        const results = [];
+
+        // 策略1: 端口扫描 - 尝试其他可能的端口
+        const commonPorts = ['80', '443', '8080', '8443', '8000', '8008', '8888', '3000', '5000', '9000'];
+
+        for (const port of commonPorts) {
+            if (port === targetPort) continue; // 跳过已知端口
+
+            try {
+                const testUrl = `${targetUrl.protocol}//${targetHost}:${port}/`;
+                const startTime = Date.now();
+
+                const response = await fetch(testUrl, {
+                    method: 'HEAD',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': '*/*',
+                        'Connection': 'close'
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                const responseTime = Date.now() - startTime;
+
+                results.push({
+                    strategy: `port_scan_${port}`,
+                    url: testUrl,
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseTime: responseTime + 'ms',
+                    success: response.ok && response.status !== 403,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+
+                // 如果找到一个可用端口，立即返回成功结果
+                if (response.ok && response.status !== 403) {
+                    return new Response(JSON.stringify({
+                        success: true,
+                        alternativeAccess: testUrl,
+                        message: `发现可用端口: ${port}`,
+                        response: {
+                            status: response.status,
+                            headers: Object.fromEntries(response.headers.entries())
+                        }
+                    }, null, 2), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+
+            } catch (error) {
+                results.push({
+                    strategy: `port_scan_${port}`,
+                    url: `${targetUrl.protocol}//${targetHost}:${port}/`,
+                    error: error.message,
+                    success: false
+                });
+            }
+        }
+
+        // 策略2: 子域名发现和测试
+        const subdomains = ['www', 'api', 'admin', 'app', 'web', 'mail', 'ftp', 'staging', 'dev', 'test'];
+
+        for (const subdomain of subdomains) {
+            try {
+                const subdomainUrl = `${targetUrl.protocol}//${subdomain}.${targetHost}:${targetPort}/`;
+                const startTime = Date.now();
+
+                const response = await fetch(subdomainUrl, {
+                    method: 'HEAD',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': '*/*',
+                        'Host': `${subdomain}.${targetHost}`
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                const responseTime = Date.now() - startTime;
+
+                results.push({
+                    strategy: `subdomain_${subdomain}`,
+                    url: subdomainUrl,
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseTime: responseTime + 'ms',
+                    success: response.ok && response.status !== 403,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+
+                // 如果找到一个可用子域名，返回成功结果
+                if (response.ok && response.status !== 403) {
+                    return new Response(JSON.stringify({
+                        success: true,
+                        alternativeAccess: subdomainUrl,
+                        message: `发现可用子域名: ${subdomain}.${targetHost}`,
+                        response: {
+                            status: response.status,
+                            headers: Object.fromEntries(response.headers.entries())
+                        }
+                    }, null, 2), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+
+            } catch (error) {
+                results.push({
+                    strategy: `subdomain_${subdomain}`,
+                    url: `${targetUrl.protocol}//${subdomain}.${targetHost}:${targetPort}/`,
+                    error: error.message,
+                    success: false
+                });
+            }
+        }
+
+        // 策略3: DNS over HTTPS查找真实IP
+        try {
+            const dohUrl = `https://cloudflare-dns.com/dns-query?name=${targetHost}&type=A`;
+            const dohResponse = await fetch(dohUrl, {
+                headers: {
+                    'Accept': 'application/dns-json',
+                    'User-Agent': 'Advanced-Bypass-Scanner/1.0'
+                }
+            });
+
+            if (dohResponse.ok) {
+                const dnsData = await dohResponse.json();
+                if (dnsData.Answer && dnsData.Answer.length > 0) {
+                    const realIPs = dnsData.Answer
+                        .filter(record => record.type === 1) // A records
+                        .map(record => record.data);
+
+                    results.push({
+                        strategy: 'dns_over_https',
+                        discoveredIPs: realIPs,
+                        success: realIPs.length > 0
+                    });
+
+                    // 测试发现的真实IP
+                    for (const ip of realIPs) {
+                        if (ip !== targetHost) { // 确保不是同一个IP
+                            try {
+                                const directIpUrl = `${targetUrl.protocol}//${ip}:${targetPort}/`;
+                                const response = await fetch(directIpUrl, {
+                                    method: 'HEAD',
+                                    headers: {
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                                        'Accept': '*/*'
+                                    },
+                                    signal: AbortSignal.timeout(5000)
+                                });
+
+                                if (response.ok && response.status !== 403) {
+                                    return new Response(JSON.stringify({
+                                        success: true,
+                                        alternativeAccess: directIpUrl,
+                                        message: `通过DNS解析发现可用真实IP: ${ip}`,
+                                        response: {
+                                            status: response.status,
+                                            headers: Object.fromEntries(response.headers.entries())
+                                        }
+                                    }, null, 2), {
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+                                }
+                            } catch (error) {
+                                results.push({
+                                    strategy: `real_ip_${ip}`,
+                                    error: error.message,
+                                    success: false
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            results.push({
+                strategy: 'dns_over_https',
+                error: error.message,
+                success: false
+            });
+        }
+
+        // 策略4: HTTP到HTTPS转换测试
+        if (targetUrl.protocol === 'http:') {
+            try {
+                const httpsUrl = `https://${targetHost}:443/`;
+                const response = await fetch(httpsUrl, {
+                    method: 'HEAD',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': '*/*'
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                if (response.ok && response.status !== 403) {
+                    return new Response(JSON.stringify({
+                        success: true,
+                        alternativeAccess: httpsUrl,
+                        message: 'HTTPS版本可用',
+                        response: {
+                            status: response.status,
+                            headers: Object.fromEntries(response.headers.entries())
+                        }
+                    }, null, 2), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+            } catch (error) {
+                results.push({
+                    strategy: 'http_to_https',
+                    error: error.message,
+                    success: false
+                });
+            }
+        }
+
+        // 如果所有策略都失败，返回详细报告
+        return new Response(JSON.stringify({
+            success: false,
+            message: '所有高级绕过策略都失败了',
+            originalTarget: config.proxyURL,
+            timestamp: new Date().toISOString(),
+            detailedResults: results,
+            summary: {
+                totalTests: results.length,
+                successful: results.filter(r => r.success).length,
+                failed: results.filter(r => !r.success).length
+            },
+            recommendations: [
+                '目标服务器的Cloudflare保护非常严格',
+                '建议联系目标服务器管理员获取正确的域名',
+                '考虑使用VPN或其他网络路径',
+                '检查是否有官方的API端点可用'
+            ]
+        }, null, 2), {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+    } catch (error) {
+        return new Response(JSON.stringify({
+            error: '高级绕过测试失败: ' + error.message,
+            timestamp: new Date().toISOString()
+        }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json'
             }
         });
     }
