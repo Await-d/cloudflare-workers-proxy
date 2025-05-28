@@ -800,19 +800,26 @@ async function handleProxyRequest(request, env, ctx) {
                 if (response.ok) {
                     const responseHeaders = new Headers(response.headers);
 
-                    // 添加CORS头部
+                    // 添加CORS头部 (这些是允许我们自己的前端访问代理的)
                     responseHeaders.set('Access-Control-Allow-Origin', '*');
                     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
                     responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Service-Key, X-Requested-With');
 
-                    // 移除可能导致问题的头部
-                    responseHeaders.delete('content-security-policy');
-                    responseHeaders.delete('x-frame-options');
+                    // 关键: 移除或修改目标服务器可能发送的、会干扰代理或iframe的安全头部
+                    responseHeaders.delete('X-Frame-Options'); // 移除X-Frame-Options以允许iframe（虽然我们目前不用，但以防万一）
+                    responseHeaders.delete('Content-Security-Policy'); // 移除CSP，或者进行非常小心的修改
+                    responseHeaders.delete('Content-Security-Policy-Report-Only');
+                    responseHeaders.delete('Public-Key-Pins');
+                    responseHeaders.delete('Strict-Transport-Security');
+                    responseHeaders.delete('Expect-CT');
+                    responseHeaders.set('X-Content-Type-Options', 'nosniff'); // 通常是好的实践
+
+                    // 移除可能导致问题的头部 (之前已有的)
+                    const originalContentEncoding = responseHeaders.get('content-encoding');
                     responseHeaders.delete('content-encoding');
                     responseHeaders.delete('content-length');
                     responseHeaders.delete('transfer-encoding');
 
-                    // 添加调试信息
                     responseHeaders.set('X-Proxy-Strategy', strategy.name);
                     responseHeaders.set('X-Bypass-Success', 'true');
 
@@ -823,30 +830,36 @@ async function handleProxyRequest(request, env, ctx) {
                     if (contentType.includes('text/html') || contentType.includes('application/javascript') || contentType.includes('text/css')) {
                         let textBody = new TextDecoder().decode(responseBody);
 
-                        // 替换所有 http(s)://targetHost:targetPort 为 https://proxyHost
-                        const targetOriginRegex = new RegExp(targetUrl.origin.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), 'g');
-                        textBody = textBody.replace(targetOriginRegex, url.origin);
+                        const targetOrigin = targetUrl.origin; // e.g., http://117.151.15.47:29498
+                        const proxyOrigin = url.origin; // e.g., https://1panel.521029.xyz
 
-                        // 替换所有 //targetHost:targetPort (协议相对URL)
-                        const targetHostPort = targetUrl.host;
-                        const protocolRelativeRegex = new RegExp(`//${targetHostPort.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}`, 'g');
-                        textBody = textBody.replace(protocolRelativeRegex, `//${url.host}`);
+                        // 1. 替换所有绝对URL: http(s)://targetHost:targetPort/... to https://proxyHost/...
+                        const absoluteUrlRegex = new RegExp(targetOrigin.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '(?!\\/\\w)', 'gi');
+                        textBody = textBody.replace(absoluteUrlRegex, proxyOrigin);
 
-                        // 替换相对路径中的 / (确保只处理引号或括号内的)
-                        // 注意: 这是一个简化的版本，可能不够鲁棒，需要更复杂的解析器才能完美处理所有情况
-                        // 例如: src="/path", href='/path', url(/path)
-                        const relativePathRegex = /(href|src|action|url\()(['"]?)(\/)(?!\/)/gi;
-                        textBody = textBody.replace(relativePathRegex, (match, p1, p2, p3) => {
-                            return `${p1}${p2}${url.origin}/`;
+                        // 2. 替换协议相对URL: //targetHost:targetPort/... to //proxyHost/...
+                        const targetHostPort = targetUrl.host; // e.g., 117.151.15.47:29498
+                        const proxyHost = url.host; // e.g., 1panel.521029.xyz
+                        const protocolRelativeRegex = new RegExp(`//${targetHostPort.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}(?!\\/\\w)`, 'gi');
+                        textBody = textBody.replace(protocolRelativeRegex, `//${proxyHost}`);
+
+                        // 3. 替换路径相对URL (以 / 开头，但不是 //)
+                        //   href="/path" -> href="https://proxyHost/path"
+                        //   src='/path' -> src='https://proxyHost/path'
+                        //   url(/path) -> url(https://proxyHost/path)
+                        // 需要非常小心以避免贪婪匹配或错误替换
+                        // 这个正则表达式尝试匹配引号或括号内的 /路径
+                        const rootRelativePathRegex = /(href|src|action|url\s*\()(['"]?)(\/)(?![\/|\s#?])([^\s'"\(\)>#?]*)(['"\)]?)/gi;
+                        textBody = textBody.replace(rootRelativePathRegex, (match, attr, q1, slash, path, q2) => {
+                            // 如果路径已经是绝对URL（可能由之前的替换产生），则不再修改
+                            if (path.toLowerCase().startsWith('http:') || path.toLowerCase().startsWith('https:') || path.startsWith('//')) {
+                                return match;
+                            }
+                            return `${attr}${q1}${proxyOrigin}/${path}${q2}`;
                         });
 
                         responseBody = new TextEncoder().encode(textBody);
                     }
-
-                    // 如果原始响应是gzip压缩的，我们需要重新压缩
-                    // Cloudflare Workers 会自动处理 Accept-Encoding 和响应的 gzip 压缩，
-                    // 所以我们通常不需要手动处理，除非明确要控制。
-                    // 这里我们删除了原有的Content-Encoding，让CF自动处理或不压缩。
 
                     return new Response(responseBody, {
                         status: response.status,
