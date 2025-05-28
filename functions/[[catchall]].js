@@ -50,6 +50,9 @@ export async function onRequest(context) {
         } else if (path === '/api/status') {
             // 状态页面，通过特殊路径访问
             response = await handleHomePage(request, env);
+        } else if (path === '/api/test-target') {
+            // 测试目标服务器连接
+            response = await handleTestTarget(request, env);
         } else {
             // 所有其他请求都进行代理转发（包括根路径）
             response = await handleProxyRequest(request, env, ctx);
@@ -88,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-fix-ip-access-v2', // 版本标识
+        buildVersion: '2025-05-28-add-target-test', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -494,4 +497,124 @@ async function cacheConfig(env, config) {
  */
 async function getCachedConfig(env) {
     return await getKVConfig(env);
+}
+
+/**
+ * 测试目标服务器连接
+ */
+async function handleTestTarget(request, env) {
+    const config = await getServiceConfig(env);
+
+    if (!config) {
+        return new Response(JSON.stringify({
+            error: 'No configuration found',
+            message: 'Cannot test target without configuration'
+        }), {
+            status: 404,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+
+    const testResults = [];
+    const targetUrl = new URL(config.proxyURL);
+
+    // 测试1: 基本连接测试
+    try {
+        const testUrl = `${targetUrl.protocol}//${targetUrl.host}/`;
+        const response = await fetch(testUrl, {
+            method: 'HEAD',
+            headers: {
+                'User-Agent': 'Cloudflare-Workers-Proxy-Test'
+            }
+        });
+
+        testResults.push({
+            test: 'Basic Connection',
+            url: testUrl,
+            status: response.status,
+            statusText: response.statusText,
+            success: response.ok
+        });
+    } catch (error) {
+        testResults.push({
+            test: 'Basic Connection',
+            url: `${targetUrl.protocol}//${targetUrl.host}/`,
+            error: error.message,
+            success: false
+        });
+    }
+
+    // 测试2: 带Host头的连接测试
+    try {
+        const testUrl = `${targetUrl.protocol}//${targetUrl.host}/`;
+        const response = await fetch(testUrl, {
+            method: 'HEAD',
+            headers: {
+                'Host': targetUrl.host,
+                'User-Agent': 'Cloudflare-Workers-Proxy-Test'
+            }
+        });
+
+        testResults.push({
+            test: 'With Host Header',
+            url: testUrl,
+            host: targetUrl.host,
+            status: response.status,
+            statusText: response.statusText,
+            success: response.ok
+        });
+    } catch (error) {
+        testResults.push({
+            test: 'With Host Header',
+            url: `${targetUrl.protocol}//${targetUrl.host}/`,
+            host: targetUrl.host,
+            error: error.message,
+            success: false
+        });
+    }
+
+    // 测试3: HTTP版本测试（如果原来是HTTPS）
+    if (targetUrl.protocol === 'https:') {
+        try {
+            const httpUrl = `http://${targetUrl.host}/`;
+            const response = await fetch(httpUrl, {
+                method: 'HEAD',
+                headers: {
+                    'User-Agent': 'Cloudflare-Workers-Proxy-Test'
+                }
+            });
+
+            testResults.push({
+                test: 'HTTP Version',
+                url: httpUrl,
+                status: response.status,
+                statusText: response.statusText,
+                success: response.ok
+            });
+        } catch (error) {
+            testResults.push({
+                test: 'HTTP Version',
+                url: `http://${targetUrl.host}/`,
+                error: error.message,
+                success: false
+            });
+        }
+    }
+
+    return new Response(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        targetConfig: config.proxyURL,
+        testResults: testResults,
+        summary: {
+            total: testResults.length,
+            successful: testResults.filter(r => r.success).length,
+            failed: testResults.filter(r => !r.success).length
+        }
+    }, null, 2), {
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
 }
