@@ -548,6 +548,48 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Accept-Language', 'en-us');
                     return headers;
                 }
+            },
+            {
+                name: 'cors_proxy_bypass',
+                createRequest: () => {
+                    // 使用第三方CORS代理绕过限制
+                    const corsProxies = [
+                        'https://corsproxy.io/?',
+                        'https://cors-anywhere.herokuapp.com/',
+                        'https://api.allorigins.win/raw?url=',
+                        'https://cors.bridged.cc/',
+                        'https://yacdn.org/proxy/'
+                    ];
+
+                    // 随机选择一个代理
+                    const proxy = corsProxies[Math.floor(Math.random() * corsProxies.length)];
+                    const proxiedUrl = proxy + encodeURIComponent(targetUrl.toString());
+
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+
+                    return {
+                        headers,
+                        url: proxiedUrl
+                    };
+                }
+            },
+            {
+                name: 'dns_over_https',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 尝试通过DoH解析域名绕过某些限制
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'identity');
+                    headers.set('Connection', 'close');
+                    // 添加DoH相关头部
+                    headers.set('Accept', 'application/dns-message');
+                    headers.set('Content-Type', 'application/dns-message');
+                    return headers;
+                }
             }
         ];
 
@@ -557,7 +599,15 @@ async function handleProxyRequest(request, env, ctx) {
         // 尝试不同的绕过策略
         for (const strategy of bypassStrategies) {
             try {
-                const proxyHeaders = strategy.createRequest();
+                const strategyResult = strategy.createRequest();
+
+                // 处理异步策略
+                const proxyHeaders = strategyResult instanceof Promise ?
+                    await strategyResult :
+                    (strategyResult.headers || strategyResult);
+
+                // 处理自定义URL（如CORS代理）
+                const requestUrl = strategyResult.url || targetUrl.toString();
 
                 // 复制重要的认证头部
                 const authHeaders = ['authorization', 'cookie', 'x-api-key', 'x-auth-token'];
@@ -568,14 +618,14 @@ async function handleProxyRequest(request, env, ctx) {
                     }
                 }
 
-                const proxyRequest = new Request(targetUrl.toString(), {
+                const proxyRequest = new Request(requestUrl, {
                     method: request.method,
                     headers: proxyHeaders,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined
                 });
 
                 console.log(`尝试策略 ${strategy.name}:`, {
-                    url: targetUrl.toString(),
+                    url: requestUrl,
                     headers: Object.fromEntries(proxyHeaders.entries())
                 });
 
@@ -586,7 +636,8 @@ async function handleProxyRequest(request, env, ctx) {
                     status: response.status,
                     statusText: response.statusText,
                     success: response.ok,
-                    headers: Object.fromEntries(proxyHeaders.entries())
+                    headers: Object.fromEntries(proxyHeaders.entries()),
+                    requestUrl: requestUrl
                 });
 
                 console.log(`策略 ${strategy.name} 结果:`, {
