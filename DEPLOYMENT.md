@@ -128,3 +128,19 @@ A: 使用命令 `wrangler kv:namespace create "PROXY_CACHE"`
 ### Q: 配置错误如何调试？
 
 A: 设置 `DEBUG_MODE=true` 并查看健康检查接口的详细信息
+
+### Q: 部署失败显示"server/server not found"怎么办？
+
+A: 这通常是Pages项目缓存配置问题，建议：
+
+1. 在Cloudflare Dashboard删除现有Pages项目
+2. 创建新项目，项目名使用 `cf-workers-proxy`
+3. 重新连接GitHub仓库并部署
+
+### Q: "No functions dir found"错误如何解决？
+
+A: 确保项目根目录有 `functions/` 目录和 `functions/[[catchall]].js` 文件
+
+### Q: 可以手动部署吗？
+
+A: 可以使用 `wrangler pages deploy . --project-name=cf-workers-proxy`
