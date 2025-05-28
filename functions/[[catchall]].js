@@ -47,11 +47,11 @@ export async function onRequest(context) {
         if (path.startsWith('/api/health')) {
             // 健康检查
             response = await handleHealthCheck(request, env);
-        } else if (path === '/' || path === '') {
-            // 首页显示项目信息
+        } else if (path === '/api/status') {
+            // 状态页面，通过特殊路径访问
             response = await handleHomePage(request, env);
         } else {
-            // 所有其他请求都进行代理转发
+            // 所有其他请求都进行代理转发（包括根路径）
             response = await handleProxyRequest(request, env, ctx);
         }
 
@@ -88,11 +88,12 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-fix-config-parsing', // 版本标识
+        buildVersion: '2025-05-28-fix-proxy-routing', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
         kv: kvInfo.available ? 'available' : 'not_configured',
+        statusPage: '/api/status', // 状态页面路径
         environment: {
             hasServerUrl: !!env.SERVER_URL,
             hasProxyUrl: !!env.PROXY_URL,
