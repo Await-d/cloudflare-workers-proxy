@@ -319,12 +319,12 @@ function getConfigSourceName(source) {
 }
 
 /**
- * 处理代理请求（客户端功能）- 高级浏览器模拟版本
+ * 处理代理请求 - 重新设计的智能代理系统
  */
 async function handleProxyRequest(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 获取服务配置
+    // 获取服务配置 (保留原有逻辑)
     const config = await getServiceConfig(env);
     if (!config) {
         return new Response(JSON.stringify({
@@ -345,370 +345,14 @@ async function handleProxyRequest(request, env, ctx) {
         targetUrl.pathname = url.pathname;
         targetUrl.search = url.search;
 
-        // 构建完整的浏览器请求头
-        const browserHeaders = new Headers();
+        // 创建代理请求
+        const proxyRequest = await createProxyRequest(request, targetUrl, env);
 
-        // 标准浏览器请求头
-        browserHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        browserHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
-        browserHeaders.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
-        browserHeaders.set('Accept-Encoding', 'gzip, deflate, br');
-        browserHeaders.set('Cache-Control', 'max-age=0');
-        browserHeaders.set('Connection', 'keep-alive');
-        browserHeaders.set('Upgrade-Insecure-Requests', '1');
-        browserHeaders.set('Sec-Fetch-Dest', 'document');
-        browserHeaders.set('Sec-Fetch-Mode', 'navigate');
-        browserHeaders.set('Sec-Fetch-Site', 'none');
-        browserHeaders.set('Sec-Fetch-User', '?1');
-        browserHeaders.set('sec-ch-ua', '"Google Chrome";v="120", "Chromium";v="120", "Not:A-Brand";v="99"');
-        browserHeaders.set('sec-ch-ua-mobile', '?0');
-        browserHeaders.set('sec-ch-ua-platform', '"Windows"');
+        // 发送请求并获取响应
+        const response = await fetchWithRetry(proxyRequest, env);
 
-        // 尝试多种Host策略
-        const strategies = [{
-                name: 'domain_masking',
-                headers: () => {
-                    const headers = new Headers(browserHeaders);
-                    // 尝试使用一个看起来像真实域名的Host
-                    headers.set('Host', '1panel.example.com');
-                    headers.set('Referer', 'https://1panel.example.com/');
-                    headers.set('Origin', 'https://1panel.example.com');
-                    return headers;
-                }
-            },
-            {
-                name: 'localhost_masking',
-                headers: () => {
-                    const headers = new Headers(browserHeaders);
-                    // 尝试使用localhost
-                    headers.set('Host', 'localhost:' + targetUrl.port);
-                    headers.set('Referer', `http://localhost:${targetUrl.port}/`);
-                    return headers;
-                }
-            },
-            {
-                name: 'target_host_direct',
-                headers: () => {
-                    const headers = new Headers(browserHeaders);
-                    // 直接使用目标服务器的Host
-                    headers.set('Host', targetUrl.host);
-                    headers.set('Referer', `${targetUrl.protocol}//${targetUrl.host}/`);
-                    headers.set('Origin', `${targetUrl.protocol}//${targetUrl.host}`);
-                    return headers;
-                }
-            },
-            {
-                name: 'no_host',
-                headers: () => {
-                    const headers = new Headers(browserHeaders);
-                    // 完全不设置Host
-                    return headers;
-                }
-            },
-            {
-                name: 'minimal_headers',
-                headers: () => {
-                    const headers = new Headers();
-                    // 只使用最基本的头
-                    headers.set('User-Agent', 'curl/7.68.0');
-                    headers.set('Accept', '*/*');
-                    return headers;
-                }
-            },
-            {
-                name: 'firefox_simulation',
-                headers: () => {
-                    const headers = new Headers();
-                    headers.set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0');
-                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
-                    headers.set('Accept-Language', 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2');
-                    headers.set('Accept-Encoding', 'gzip, deflate');
-                    headers.set('DNT', '1');
-                    headers.set('Connection', 'keep-alive');
-                    headers.set('Upgrade-Insecure-Requests', '1');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'python_requests',
-                headers: () => {
-                    const headers = new Headers();
-                    headers.set('User-Agent', 'python-requests/2.28.1');
-                    headers.set('Accept', '*/*');
-                    headers.set('Accept-Encoding', 'gzip, deflate');
-                    headers.set('Connection', 'keep-alive');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'wget_simulation',
-                headers: () => {
-                    const headers = new Headers();
-                    headers.set('User-Agent', 'Wget/1.20.3 (linux-gnu)');
-                    headers.set('Accept', '*/*');
-                    headers.set('Accept-Encoding', 'identity');
-                    headers.set('Connection', 'Keep-Alive');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'cloudflare_bypass',
-                headers: () => {
-                    const headers = new Headers();
-                    // 伪装成来自CDN的请求
-                    headers.set('User-Agent', 'Mozilla/5.0 (compatible; CloudflareBot/1.0; +https://www.cloudflare.com/bot-management/)');
-                    headers.set('Accept', '*/*');
-                    headers.set('CF-RAY', '12345-ABC');
-                    headers.set('CF-Visitor', '{"scheme":"https"}');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'nginx_proxy',
-                headers: () => {
-                    const headers = new Headers();
-                    // 伪装成Nginx反向代理
-                    headers.set('User-Agent', 'nginx/1.18.0');
-                    headers.set('Accept', '*/*');
-                    headers.set('X-Real-IP', '192.168.1.100');
-                    headers.set('X-Forwarded-For', '192.168.1.100');
-                    headers.set('X-Forwarded-Proto', 'https');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'mobile_safari',
-                headers: () => {
-                    const headers = new Headers();
-                    // 移动端Safari伪装
-                    headers.set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1');
-                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9');
-                    headers.set('Accept-Encoding', 'gzip, deflate');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'no_special_headers',
-                headers: () => {
-                    const headers = new Headers();
-                    // 只保留最基础的头部，不包含任何可能被识别为代理的头部
-                    headers.set('Accept', 'text/html');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'direct_ip_access',
-                headers: () => {
-                    const headers = new Headers();
-                    // 尝试直接IP访问，不设置任何虚拟主机头
-                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-                    headers.set('Accept-Language', 'en-US,en;q=0.5');
-                    headers.set('Cache-Control', 'no-cache');
-                    headers.set('Pragma', 'no-cache');
-                    // 不设置Host头，让服务器直接处理IP访问
-                    return headers;
-                }
-            },
-            {
-                name: 'legacy_browser',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟老版本浏览器
-                    headers.set('User-Agent', 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)');
-                    headers.set('Accept', 'text/html,application/xhtml+xml,*/*');
-                    headers.set('Accept-Language', 'en-us');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'api_client',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟API客户端访问
-                    headers.set('User-Agent', 'okhttp/4.9.0');
-                    headers.set('Accept', 'application/json, text/plain, */*');
-                    headers.set('Content-Type', 'application/json');
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            },
-            {
-                name: 'postman_simulation',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟Postman客户端
-                    headers.set('User-Agent', 'PostmanRuntime/7.28.4');
-                    headers.set('Accept', '*/*');
-                    headers.set('Accept-Encoding', 'gzip, deflate, br');
-                    headers.set('Host', targetUrl.host);
-                    headers.set('Cache-Control', 'no-cache');
-                    headers.set('Postman-Token', '12345678-1234-1234-1234-123456789012');
-                    return headers;
-                }
-            },
-            {
-                name: 'health_check',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟健康检查请求
-                    headers.set('User-Agent', 'HealthCheck/1.0');
-                    headers.set('Accept', '*/*');
-                    headers.set('Host', targetUrl.host);
-                    headers.set('X-Health-Check', 'true');
-                    return headers;
-                }
-            },
-            {
-                name: 'internal_service',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟内部服务调用
-                    headers.set('User-Agent', 'InternalService/1.0');
-                    headers.set('Accept', '*/*');
-                    headers.set('Host', targetUrl.host);
-                    headers.set('X-Internal-Request', 'true');
-                    headers.set('X-Service-Name', 'proxy-gateway');
-                    return headers;
-                }
-            },
-            {
-                name: 'load_balancer',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟负载均衡器请求
-                    headers.set('User-Agent', 'HAProxy/2.4');
-                    headers.set('Accept', '*/*');
-                    headers.set('Host', targetUrl.host);
-                    headers.set('X-Forwarded-For', '10.0.0.1');
-                    headers.set('X-Real-IP', '10.0.0.1');
-                    headers.set('X-Forwarded-Proto', 'https');
-                    headers.set('X-Load-Balancer', 'true');
-                    return headers;
-                }
-            },
-            {
-                name: 'monitoring_agent',
-                headers: () => {
-                    const headers = new Headers();
-                    // 模拟监控代理
-                    headers.set('User-Agent', 'Prometheus/2.30.0');
-                    headers.set('Accept', 'text/plain');
-                    headers.set('Host', targetUrl.host);
-                    headers.set('X-Prometheus-Scrape', 'true');
-                    return headers;
-                }
-            },
-            {
-                name: 'raw_request',
-                headers: () => {
-                    const headers = new Headers();
-                    // 最原始的HTTP请求
-                    headers.set('Host', targetUrl.host);
-                    return headers;
-                }
-            }
-        ];
-
-        let lastError = null;
-        let debugInfo = [];
-
-        // 尝试不同的策略
-        for (const strategy of strategies) {
-            try {
-                const strategyHeaders = strategy.headers();
-
-                // 复制原始请求的重要头部（除了Host相关的）
-                const importantHeaders = ['authorization', 'content-type', 'x-api-key', 'x-auth-token'];
-                for (const headerName of importantHeaders) {
-                    const value = request.headers.get(headerName);
-                    if (value) {
-                        strategyHeaders.set(headerName, value);
-                    }
-                }
-
-                // 创建请求
-                const modifiedRequest = new Request(targetUrl.toString(), {
-                    method: request.method,
-                    headers: strategyHeaders,
-                    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
-                });
-
-                // 发送请求
-                const response = await fetch(modifiedRequest);
-
-                debugInfo.push({
-                    strategy: strategy.name,
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: Object.fromEntries(strategyHeaders.entries()),
-                    success: response.ok
-                });
-
-                // 如果成功，返回响应
-                if (response.ok) {
-                    const responseHeaders = new Headers(response.headers);
-
-                    // 移除可能导致问题的响应头
-                    responseHeaders.delete('content-encoding');
-                    responseHeaders.delete('content-length');
-                    responseHeaders.delete('transfer-encoding');
-
-                    // 添加调试信息到响应头（如果开启调试模式）
-                    if (env.DEBUG_MODE === 'true') {
-                        responseHeaders.set('X-Proxy-Strategy', strategy.name);
-                        responseHeaders.set('X-Proxy-Debug', JSON.stringify(debugInfo));
-                    }
-
-                    return new Response(response.body, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: responseHeaders
-                    });
-                }
-
-                lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-            } catch (error) {
-                debugInfo.push({
-                    strategy: strategy.name,
-                    error: error.message,
-                    success: false
-                });
-                lastError = error;
-            }
-        }
-
-        // 所有策略都失败了
-        const errorDetails = {
-            error: 'All proxy strategies failed',
-            message: lastError ? lastError.message : 'Unknown error',
-            target: config.proxyURL,
-            timestamp: new Date().toISOString(),
-            strategiesTried: debugInfo.length
-        };
-
-        // 调试端点强制显示详细信息
-        errorDetails.debugInfo = debugInfo;
-        errorDetails.targetHost = targetUrl.host;
-        errorDetails.requestMethod = request.method;
-        errorDetails.requestPath = url.pathname + url.search;
-
-        return new Response(JSON.stringify(errorDetails, null, 2), {
-            status: 502,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        // 智能处理响应
+        return await processProxyResponse(response, request, targetUrl, env);
 
     } catch (error) {
         console.error('Proxy error:', error);
@@ -717,15 +361,13 @@ async function handleProxyRequest(request, env, ctx) {
             error: 'Proxy Error',
             message: error.message,
             target: config.proxyURL,
-            timestamp: new Date().toISOString()
-        };
-
-        // 调试端点强制显示详细错误信息
-        errorDetails.debugInfo = {
-            requestUrl: url.pathname + url.search,
-            targetHost: new URL(config.proxyURL).host,
-            requestMethod: request.method,
-            errorStack: error.stack
+            timestamp: new Date().toISOString(),
+            debugInfo: {
+                requestUrl: url.pathname + url.search,
+                targetHost: new URL(config.proxyURL).host,
+                requestMethod: request.method,
+                errorStack: error.stack
+            }
         };
 
         return new Response(JSON.stringify(errorDetails), {
@@ -735,6 +377,319 @@ async function handleProxyRequest(request, env, ctx) {
             }
         });
     }
+}
+
+/**
+ * 创建代理请求
+ */
+async function createProxyRequest(originalRequest, targetUrl, env) {
+    // 构建优化的请求头
+    const headers = new Headers();
+
+    // 复制原始请求的重要头部
+    const importantHeaders = [
+        'accept', 'accept-language', 'accept-encoding',
+        'content-type', 'authorization', 'cookie',
+        'x-requested-with', 'referer'
+    ];
+
+    for (const headerName of importantHeaders) {
+        const value = originalRequest.headers.get(headerName);
+        if (value) {
+            headers.set(headerName, value);
+        }
+    }
+
+    // 设置适合的User-Agent和浏览器头部
+    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8');
+    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+    headers.set('Accept-Encoding', 'gzip, deflate, br');
+    headers.set('Cache-Control', 'no-cache');
+    headers.set('Pragma', 'no-cache');
+
+    // 关键：正确设置Host头部
+    headers.set('Host', targetUrl.host);
+
+    // 设置来源信息，让目标服务器认为是直接访问
+    const origin = `${targetUrl.protocol}//${targetUrl.host}`;
+    headers.set('Origin', origin);
+    headers.set('Referer', origin + '/');
+
+    // 现代浏览器安全头部
+    headers.set('Sec-Fetch-Dest', 'document');
+    headers.set('Sec-Fetch-Mode', 'navigate');
+    headers.set('Sec-Fetch-Site', 'same-origin');
+    headers.set('Sec-Fetch-User', '?1');
+
+    // 移除可能暴露代理身份的头部
+    headers.delete('cf-ray');
+    headers.delete('cf-visitor');
+    headers.delete('x-forwarded-for');
+    headers.delete('x-real-ip');
+
+    return new Request(targetUrl.toString(), {
+        method: originalRequest.method,
+        headers: headers,
+        body: originalRequest.method !== 'GET' && originalRequest.method !== 'HEAD' ?
+            originalRequest.body : undefined
+    });
+}
+
+/**
+ * 带重试的请求发送
+ */
+async function fetchWithRetry(request, env, maxRetries = 3) {
+    let lastError;
+
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await fetch(request.clone());
+
+            if (response.ok || response.status < 500) {
+                // 成功或客户端错误（4xx），直接返回
+                return response;
+            }
+
+            lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+            // 服务器错误，稍后重试
+            if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            }
+
+        } catch (error) {
+            lastError = error;
+            if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
+/**
+ * 智能处理代理响应
+ */
+async function processProxyResponse(response, originalRequest, targetUrl, env) {
+    // 检查响应是否成功
+    if (!response.ok) {
+        // 对于4xx和5xx错误，直接返回，但要处理CORS
+        const responseHeaders = new Headers(response.headers);
+        addCorsHeaders(responseHeaders);
+
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const responseHeaders = new Headers(response.headers);
+
+    // 添加CORS头部
+    addCorsHeaders(responseHeaders);
+
+    // 移除可能导致问题的头部
+    responseHeaders.delete('content-security-policy');
+    responseHeaders.delete('x-frame-options');
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('transfer-encoding');
+
+    // 根据内容类型进行不同处理
+    if (contentType.includes('text/html')) {
+        return await processHtmlResponse(response, originalRequest, targetUrl, responseHeaders, env);
+    } else if (contentType.includes('text/css')) {
+        return await processCssResponse(response, originalRequest, targetUrl, responseHeaders);
+    } else if (contentType.includes('application/javascript') || contentType.includes('text/javascript')) {
+        return await processJsResponse(response, originalRequest, targetUrl, responseHeaders);
+    } else {
+        // 其他类型文件直接返回
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+    }
+}
+
+/**
+ * 处理HTML响应 - 重写URL和注入代理脚本
+ */
+async function processHtmlResponse(response, originalRequest, targetUrl, responseHeaders, env) {
+    let html = await response.text();
+    const proxyUrl = new URL(originalRequest.url);
+    const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
+
+    // URL重写规则
+    const targetBase = `${targetUrl.protocol}//${targetUrl.host}`;
+
+    // 重写绝对URL
+    html = html.replace(
+        new RegExp(`https?://${escapeRegex(targetUrl.host)}`, 'gi'),
+        baseUrl
+    );
+
+    // 重写相对URL
+    html = html.replace(
+        /(?:href|src|action)=["']([^"']+)["']/gi,
+        (match, url) => {
+            if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('mailto:')) {
+                return match;
+            }
+
+            // 处理相对路径
+            let newUrl = url;
+            if (url.startsWith('/')) {
+                newUrl = baseUrl + url;
+            } else if (!url.startsWith('#')) {
+                // 相对路径，需要基于当前路径计算
+                const currentPath = new URL(originalRequest.url).pathname;
+                const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                newUrl = baseUrl + basePath + url;
+            }
+
+            return match.replace(url, newUrl);
+        }
+    );
+
+    // 注入代理增强脚本
+    const proxyScript = `
+    <script>
+    (function() {
+        // 拦截和重写fetch请求
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
+                if (url.startsWith('/')) {
+                    url = '${baseUrl}' + url;
+                } else {
+                    const currentPath = window.location.pathname;
+                    const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                    url = '${baseUrl}' + basePath + url;
+                }
+            }
+            return originalFetch.call(this, url, options);
+        };
+        
+        // 拦截XMLHttpRequest
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...args) {
+            if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//')) {
+                if (url.startsWith('/')) {
+                    url = '${baseUrl}' + url;
+                } else {
+                    const currentPath = window.location.pathname;
+                    const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                    url = '${baseUrl}' + basePath + url;
+                }
+            }
+            return originalXHROpen.call(this, method, url, ...args);
+        };
+        
+        // 修复window.location
+        if (window.location.host !== '${targetUrl.host}') {
+            Object.defineProperty(window, 'location', {
+                value: {
+                    ...window.location,
+                    host: '${targetUrl.host}',
+                    hostname: '${targetUrl.hostname}',
+                    origin: '${targetBase}',
+                    protocol: '${targetUrl.protocol}',
+                    port: '${targetUrl.port || (targetUrl.protocol === 'https:' ? '443' : '80')}'
+                },
+                writable: false
+            });
+        }
+    })();
+    </script>
+    `;
+
+    // 在</head>之前插入脚本
+    if (html.includes('</head>')) {
+        html = html.replace('</head>', proxyScript + '\n</head>');
+    } else if (html.includes('<head>')) {
+        html = html.replace('<head>', '<head>\n' + proxyScript);
+    } else {
+        html = proxyScript + '\n' + html;
+    }
+
+    responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
+
+    return new Response(html, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders
+    });
+}
+
+/**
+ * 处理CSS响应 - 重写URL引用
+ */
+async function processCssResponse(response, originalRequest, targetUrl, responseHeaders) {
+    let css = await response.text();
+    const proxyUrl = new URL(originalRequest.url);
+    const baseUrl = `${proxyUrl.protocol}//${proxyUrl.host}`;
+
+    // 重写CSS中的URL引用
+    css = css.replace(
+        /url\(['"]?([^'"）]+)['"]?\)/gi,
+        (match, url) => {
+            if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:')) {
+                return match;
+            }
+
+            let newUrl = url;
+            if (url.startsWith('/')) {
+                newUrl = baseUrl + url;
+            } else {
+                const currentPath = new URL(originalRequest.url).pathname;
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                newUrl = baseUrl + basePath + url;
+            }
+
+            return `url('${newUrl}')`;
+        }
+    );
+
+    return new Response(css, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders
+    });
+}
+
+/**
+ * 处理JavaScript响应
+ */
+async function processJsResponse(response, originalRequest, targetUrl, responseHeaders) {
+    // 对于JS文件，暂时直接返回，避免破坏复杂的JS逻辑
+    // 可以根据需要在这里添加特定的JS重写逻辑
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders
+    });
+}
+
+/**
+ * 添加CORS头部
+ */
+function addCorsHeaders(headers) {
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Service-Key, X-Requested-With');
+    headers.set('Access-Control-Max-Age', '86400');
+}
+
+/**
+ * 转义正则表达式特殊字符
+ */
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
