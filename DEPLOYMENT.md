@@ -24,9 +24,17 @@ CLOUDFLARE_API_TOKEN=你的API Token
 CLOUDFLARE_ACCOUNT_ID=你的账户ID
 ```
 
-### 第三步：配置环境变量
+### 第三步：推送代码触发部署
 
-推送代码后，在 Cloudflare Dashboard 的 Pages 项目设置中添加环境变量：
+```bash
+git push origin main
+```
+
+GitHub Actions 会自动部署到 Cloudflare Pages。
+
+### 第四步：配置环境变量
+
+部署完成后，在 Cloudflare Dashboard 的 Pages 项目设置中添加环境变量：
 
 #### 方式一：从服务端获取配置（推荐）
 
@@ -53,14 +61,6 @@ DEBUG_MODE=false
 PROXY_CACHE_KV_ID=your-kv-namespace-id
 PROXY_CACHE_KV_PREVIEW_ID=your-preview-kv-id
 ```
-
-### 第四步：推送代码
-
-```bash
-git push origin main
-```
-
-GitHub Actions 会自动部署到 Cloudflare Pages。
 
 ## 🔧 服务端部署（配置管理）
 

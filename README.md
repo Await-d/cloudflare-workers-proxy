@@ -70,7 +70,7 @@ cloudflare-workers-proxy/
 3. **推送代码**：
    - Fork 仓库后直接推送到 GitHub
    - GitHub Actions 自动部署到 Cloudflare Pages
-   - 无需修改任何配置文件
+   - **完全零配置**：项目移除了 wrangler.toml，避免配置冲突
 
 4. **配置环境变量**：
    在Cloudflare Dashboard的Pages项目设置中添加：
