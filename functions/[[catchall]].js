@@ -86,6 +86,9 @@ export async function onRequest(context) {
         } else if (path === '/api/debug-proxy') {
             // 调试代理请求，强制开启详细日志
             response = await handleDebugProxy(request, env, ctx);
+        } else if (path === '/api/debug-direct') {
+            // 直接测试目标服务器响应
+            response = await handleDebugDirect(request, env);
         } else {
             // 所有其他请求都进行代理转发（包括根路径）
             response = await handleProxyRequest(request, env, ctx);
@@ -1248,6 +1251,139 @@ async function handleProxyReport(request, env) {
     };
 
     return new Response(JSON.stringify(report), {
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+}
+
+/**
+ * 直接测试目标服务器响应
+ */
+async function handleDebugDirect(request, env) {
+    const config = await getServiceConfig(env);
+
+    if (!config) {
+        return new Response(JSON.stringify({
+            error: 'No configuration found'
+        }), {
+            status: 404,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+
+    const targetUrl = new URL(config.proxyURL);
+    const debugInfo = {
+        timestamp: new Date().toISOString(),
+        targetConfig: config.proxyURL,
+        targetHost: targetUrl.host,
+        tests: []
+    };
+
+    // 测试1: 直接访问目标服务器根路径
+    try {
+        const testUrl = `${targetUrl.protocol}//${targetUrl.host}/`;
+        const response = await fetch(testUrl, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Cloudflare-Workers-Proxy-Debug',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+        });
+
+        const responseText = await response.text();
+
+        debugInfo.tests.push({
+            test: 'Direct Access',
+            url: testUrl,
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            bodyPreview: responseText.substring(0, 500),
+            success: response.ok
+        });
+    } catch (error) {
+        debugInfo.tests.push({
+            test: 'Direct Access',
+            error: error.message,
+            success: false
+        });
+    }
+
+    // 测试2: 使用Host头访问
+    try {
+        const testUrl = `${targetUrl.protocol}//${targetUrl.host}/`;
+        const response = await fetch(testUrl, {
+            method: 'GET',
+            headers: {
+                'Host': targetUrl.host,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+        });
+
+        const responseText = await response.text();
+
+        debugInfo.tests.push({
+            test: 'With Host Header',
+            url: testUrl,
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            bodyPreview: responseText.substring(0, 500),
+            success: response.ok
+        });
+    } catch (error) {
+        debugInfo.tests.push({
+            test: 'With Host Header',
+            error: error.message,
+            success: false
+        });
+    }
+
+    // 测试3: 模拟我们的代理请求
+    try {
+        const testUrl = `${targetUrl.protocol}//${targetUrl.host}/`;
+        const proxyHeaders = new Headers();
+
+        // 复制当前请求的头部
+        for (const [name, value] of request.headers.entries()) {
+            if (!['host', 'cf-ray', 'cf-visitor', 'cf-connecting-ip'].includes(name.toLowerCase())) {
+                proxyHeaders.set(name, value);
+            }
+        }
+
+        proxyHeaders.set('Host', targetUrl.host);
+        proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        const response = await fetch(testUrl, {
+            method: 'GET',
+            headers: proxyHeaders
+        });
+
+        const responseText = await response.text();
+
+        debugInfo.tests.push({
+            test: 'Proxy Simulation',
+            url: testUrl,
+            requestHeaders: Object.fromEntries(proxyHeaders.entries()),
+            status: response.status,
+            statusText: response.statusText,
+            responseHeaders: Object.fromEntries(response.headers.entries()),
+            bodyPreview: responseText.substring(0, 500),
+            success: response.ok
+        });
+    } catch (error) {
+        debugInfo.tests.push({
+            test: 'Proxy Simulation',
+            error: error.message,
+            success: false
+        });
+    }
+
+    return new Response(JSON.stringify(debugInfo, null, 2), {
         headers: {
             'Content-Type': 'application/json'
         }
