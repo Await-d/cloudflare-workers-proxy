@@ -1,35 +1,34 @@
-name = "cloudflare-workers-proxy"
+name = "cloudflare-workers-proxy-client"
 compatibility_date = "2023-09-01"
 compatibility_flags = []
 
 # Pages 配置
 pages_build_output_dir = "./"
 
-# KV命名空间绑定
+# KV命名空间绑定（客户端缓存）
 [[kv_namespaces]]
-binding = "SERVICE_CONFIGS"
+binding = "PROXY_CACHE"
 id = "xxxx" # 需要替换为你的KV命名空间ID
 preview_id = "xxxx" # 需要替换为你的预览KV命名空间ID
 
 # 环境变量
 [vars]
 DEBUG_MODE = "false"
-MAX_REQUESTS_PER_MINUTE = "60"
 
 # 生产环境配置
 [env.production]
 vars = { 
-    MAX_REQUESTS_PER_MINUTE = "100",
     DEBUG_MODE = "false"
 }
-# 密钥变量应通过 Cloudflare Dashboard 或 wrangler secret 设置：
-# SECRET_KEYS - 客户端访问密钥列表（逗号分隔）
-# ADMIN_KEY - 管理员密钥
-# ENCRYPTION_KEY - 配置加密密钥
+# 客户端环境变量（通过 Cloudflare Dashboard 或 wrangler secret 设置）：
+# SERVER_URL - 服务端API地址（可选，如果设置则从服务端获取配置）
+# SECRET_KEY - 访问服务端的密钥（当使用SERVER_URL时必需）
+# SERVICE_KEY - 服务标识（当使用SERVER_URL时必需）
+# PROXY_URL - 直接配置代理目标地址（当不使用SERVER_URL时必需）
+# UPDATE_INTERVAL - 配置更新间隔（可选，默认3600秒）
 
 # 测试环境配置
 [env.staging]
 vars = { 
-    MAX_REQUESTS_PER_MINUTE = "30",
     DEBUG_MODE = "true"
 } 

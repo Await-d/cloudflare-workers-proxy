@@ -1,11 +1,11 @@
 # Cloudflare Workers 代理服务
 
-一个基于Cloudflare Pages + Functions的动态代理转发服务，统一了客户端和服务端功能。系统允许用户通过Web界面配置不同的代理地址，支持动态配置管理和外部API推送。
+一个基于Cloudflare Pages + Functions的动态代理转发服务，包含独立的客户端和服务端。客户端负责代理转发，服务端提供配置管理和Web界面。
 
 ## 🚀 项目特点
 
 - **Pages + Functions架构**：基于Cloudflare Pages和Functions部署，享受全球CDN加速
-- **统一入口**：客户端和服务端功能整合在一个项目中
+- **独立部署**：客户端和服务端可独立部署和扩展
 - **动态配置**：支持实时更新代理配置，无需重新部署
 - **安全可靠**：加密存储配置数据，多层认证机制
 - **易于管理**：现代化Web管理界面
@@ -17,14 +17,14 @@
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │                 │    │                 │    │                 │
-│   客户端请求     │───▶│   Pages+Functions│───▶│   目标服务器     │
-│                 │    │   (统一代理)     │    │                 │
+│   客户端请求     │───▶│   客户端Pages    │───▶│   目标服务器     │
+│                 │    │   (代理转发)     │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
-                              ▼
+                              ▼ 获取配置
                        ┌─────────────────┐
                        │                 │
-                       │   管理界面       │
+                       │   服务端Pages    │
                        │   (配置管理)     │
                        │                 │
                        └─────────────────┘
@@ -35,18 +35,20 @@
 ```
 cloudflare-workers-proxy/
 ├── .github/workflows/         # GitHub Actions 自动部署
-│   └── deploy.yml            # 部署工作流
-├── public/                   # 静态资源
-│   └── index.html           # 项目首页
-├── server/                   # 服务端代码（保持兼容）
+│   └── deploy.yml            # 客户端部署工作流
+├── public/                   # 客户端静态资源
+│   └── index.html           # 客户端首页
+├── server/                   # 服务端代码（独立部署）
 │   ├── admin/               # 管理界面
 │   ├── config.js            # 配置管理
 │   ├── auth.js              # 认证模块
-│   └── ...                  # 其他服务端文件
-├── _worker.js               # Pages Functions 入口文件
-├── _routes.json             # 路由配置
-├── wrangler.toml           # Pages 部署配置
-└── README.md               # 项目文档
+│   └── README.md            # 服务端部署说明
+├── server-pages/             # 服务端Pages部署说明
+│   └── README.md            # 服务端Pages部署指南
+├── _worker.js               # 客户端Pages Functions入口
+├── _routes.json             # 客户端路由配置
+├── wrangler.toml           # 客户端部署配置
+└── README.md               # 项目总体文档
 ```
 
 ## 🛠️ 快速部署

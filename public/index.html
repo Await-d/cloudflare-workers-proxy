@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare Workers 代理服务</title>
+    <title>Cloudflare Workers 代理客户端</title>
     <style>
         * {
             margin: 0;
@@ -78,6 +78,35 @@
             margin-bottom: 1rem;
         }
 
+        .config-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .config-section h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .config-option {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .code {
+            background: #f1f3f4;
+            padding: 0.5rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
         .actions {
             display: flex;
             justify-content: center;
@@ -118,39 +147,6 @@
             color: white;
         }
 
-        .status {
-            background: white;
-            border-radius: 10px;
-            padding: 2rem;
-            margin-top: 3rem;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #28a745;
-            margin-right: 0.5rem;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
-
         .footer {
             text-align: center;
             color: white;
@@ -174,64 +170,68 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Cloudflare Workers 代理服务</h1>
-            <p>基于 Cloudflare Pages + Functions 的高性能代理服务平台</p>
+            <h1>🚀 代理客户端</h1>
+            <p>基于 Cloudflare Pages + Functions 的高性能代理转发服务</p>
         </div>
 
         <div class="features">
             <div class="feature-card">
                 <div class="feature-icon">⚡</div>
-                <h3>高性能</h3>
-                <p>基于Cloudflare的全球CDN网络，提供极速的代理服务响应</p>
+                <h3>高性能代理</h3>
+                <p>基于Cloudflare全球网络，提供极速的代理转发服务</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon">🔧</div>
-                <h3>动态配置</h3>
-                <p>支持实时更新代理配置，无需重新部署，灵活应对各种需求</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">🔒</div>
-                <h3>安全可靠</h3>
-                <p>多层认证机制，配置数据加密存储，确保服务安全稳定</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">🎛️</div>
-                <h3>易于管理</h3>
-                <p>现代化Web管理界面，支持可视化配置管理和监控</p>
+                <h3>灵活配置</h3>
+                <p>支持多种配置方式：环境变量、服务端API、KV存储</p>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon">🌐</div>
                 <h3>全球部署</h3>
-                <p>基于Cloudflare Pages自动部署，支持全球访问和故障转移</p>
+                <p>通过GitHub Actions自动部署到Cloudflare Pages</p>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>📋 配置方式</h3>
+
+            <div class="config-option">
+                <h4>方式一：从服务端获取配置（推荐）</h4>
+                <p>设置以下环境变量：</p>
+                <div class="code">
+                    SERVER_URL=https://your-server.workers.dev<br>
+                    SECRET_KEY=your-secret-key<br>
+                    SERVICE_KEY=your-service-key
+                </div>
             </div>
 
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <h3>实时监控</h3>
-                <p>完善的日志记录和错误处理，支持实时状态监控</p>
+            <div class="config-option">
+                <h4>方式二：直接配置代理地址</h4>
+                <p>设置以下环境变量：</p>
+                <div class="code">
+                    PROXY_URL=https://api.example.com<br>
+                    UPDATE_INTERVAL=3600
+                </div>
+            </div>
+
+            <div class="config-option">
+                <h4>方式三：使用KV存储</h4>
+                <p>在KV命名空间中存储配置JSON：</p>
+                <div class="code">
+                    {"proxyURL": "https://api.example.com", "updateInterval": 3600}
+                </div>
             </div>
         </div>
 
         <div class="actions">
-            <a href="/admin" class="btn btn-primary">🎛️ 管理控制台</a>
+            <a href="/api/health" class="btn btn-primary">🔍 健康检查</a>
             <a href="https://github.com/Await-d/cloudflare-workers-proxy" class="btn btn-secondary">📚 查看文档</a>
         </div>
 
-        <div class="status">
-            <h3>🔋 服务状态</h3>
-            <p>
-                <span class="status-indicator"></span>
-                <span id="status-text">检查中...</span>
-            </p>
-            <small id="last-check">最后检查时间: --</small>
-        </div>
-
         <div class="footer">
-            <p>© 2024 Cloudflare Workers Proxy | 基于 Apache-2.0 许可证开源</p>
+            <p>© 2024 Cloudflare Workers Proxy Client | 基于 Apache-2.0 许可证开源</p>
         </div>
     </div>
 
@@ -239,39 +239,18 @@
         // 检查服务状态
         async function checkServiceStatus() {
             try {
-                const response = await fetch('/api/config', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': 'Bearer check',
-                        'X-Service-Key': 'health-check'
-                    }
-                });
+                const response = await fetch('/api/health');
+                const data = await response.json();
 
-                const statusText = document.getElementById('status-text');
-                const lastCheck = document.getElementById('last-check');
-
-                if (response.status === 401) {
-                    statusText.textContent = '服务运行正常（需要认证）';
-                } else if (response.ok) {
-                    statusText.textContent = '服务运行正常';
-                } else {
-                    statusText.textContent = '服务可能存在问题';
-                }
-
-                lastCheck.textContent = `最后检查时间: ${new Date().toLocaleString()}`;
+                console.log('Service Status:', data);
 
             } catch (error) {
-                console.error('Status check failed:', error);
-                document.getElementById('status-text').textContent = '无法连接到服务';
-                document.getElementById('last-check').textContent = `最后检查时间: ${new Date().toLocaleString()}`;
+                console.error('Health check failed:', error);
             }
         }
 
         // 页面加载时检查状态
         document.addEventListener('DOMContentLoaded', checkServiceStatus);
-
-        // 每30秒检查一次状态
-        setInterval(checkServiceStatus, 30000);
     </script>
 </body>
 
