@@ -354,8 +354,11 @@ async function handleProxyRequest(request, env, ctx) {
     try {
         // 构建目标URL
         const targetUrl = new URL(config.proxyURL);
-        targetUrl.pathname = url.pathname;
-        targetUrl.search = url.search;
+        const originalPathname = url.pathname;
+        const originalSearch = url.search;
+
+        targetUrl.pathname = originalPathname;
+        targetUrl.search = originalSearch;
 
         console.log('代理请求:', {
             original: request.url,
@@ -363,7 +366,6 @@ async function handleProxyRequest(request, env, ctx) {
             method: request.method
         });
 
-        // 绕过Cloudflare IP保护的策略
         const bypassStrategies = [{
                 name: 'raw_ip_access',
                 createRequest: () => {
@@ -742,8 +744,15 @@ async function handleProxyRequest(request, env, ctx) {
                     await strategyResult :
                     (strategyResult.headers || strategyResult);
 
-                // 处理自定义URL（如CORS代理）
-                const requestUrl = strategyResult.url || targetUrl.toString();
+                // 确保Host头是目标服务器的Host
+                proxyHeaders.set('Host', targetUrl.host);
+
+                // 复制Referer头 (如果存在)
+                if (request.headers.has('Referer')) {
+                    proxyHeaders.set('Referer', request.headers.get('Referer').replace(url.origin, targetUrl.origin));
+                }
+
+                const requestUrlToFetch = strategyResult.url || targetUrl.toString();
 
                 // 复制重要的认证头部
                 const authHeaders = ['authorization', 'cookie', 'x-api-key', 'x-auth-token'];
@@ -754,14 +763,14 @@ async function handleProxyRequest(request, env, ctx) {
                     }
                 }
 
-                const proxyRequest = new Request(requestUrl, {
+                const proxyRequest = new Request(requestUrlToFetch, {
                     method: request.method,
                     headers: proxyHeaders,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined
                 });
 
                 console.log(`尝试策略 ${strategy.name}:`, {
-                    url: requestUrl,
+                    url: requestUrlToFetch,
                     headers: Object.fromEntries(proxyHeaders.entries())
                 });
 
@@ -773,7 +782,7 @@ async function handleProxyRequest(request, env, ctx) {
                     statusText: response.statusText,
                     success: response.ok,
                     headers: Object.fromEntries(proxyHeaders.entries()),
-                    requestUrl: requestUrl
+                    requestUrl: requestUrlToFetch
                 });
 
                 console.log(`策略 ${strategy.name} 结果:`, {
@@ -802,7 +811,39 @@ async function handleProxyRequest(request, env, ctx) {
                     responseHeaders.set('X-Proxy-Strategy', strategy.name);
                     responseHeaders.set('X-Bypass-Success', 'true');
 
-                    return new Response(response.body, {
+                    let responseBody = await response.arrayBuffer();
+                    let contentType = response.headers.get('content-type') || '';
+
+                    // 内容重写：替换目标URL为代理URL
+                    if (contentType.includes('text/html') || contentType.includes('application/javascript') || contentType.includes('text/css')) {
+                        let textBody = new TextDecoder().decode(responseBody);
+
+                        // 替换所有 http(s)://targetHost:targetPort 为 https://proxyHost
+                        const targetOriginRegex = new RegExp(targetUrl.origin.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), 'g');
+                        textBody = textBody.replace(targetOriginRegex, url.origin);
+
+                        // 替换所有 //targetHost:targetPort (协议相对URL)
+                        const targetHostPort = targetUrl.host;
+                        const protocolRelativeRegex = new RegExp(`//${targetHostPort.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}`, 'g');
+                        textBody = textBody.replace(protocolRelativeRegex, `//${url.host}`);
+
+                        // 替换相对路径中的 / (确保只处理引号或括号内的)
+                        // 注意: 这是一个简化的版本，可能不够鲁棒，需要更复杂的解析器才能完美处理所有情况
+                        // 例如: src="/path", href='/path', url(/path)
+                        const relativePathRegex = /(href|src|action|url\()(['"]?)(\/)(?!\/)/gi;
+                        textBody = textBody.replace(relativePathRegex, (match, p1, p2, p3) => {
+                            return `${p1}${p2}${url.origin}/`;
+                        });
+
+                        responseBody = new TextEncoder().encode(textBody);
+                    }
+
+                    // 如果原始响应是gzip压缩的，我们需要重新压缩
+                    // Cloudflare Workers 会自动处理 Accept-Encoding 和响应的 gzip 压缩，
+                    // 所以我们通常不需要手动处理，除非明确要控制。
+                    // 这里我们删除了原有的Content-Encoding，让CF自动处理或不压缩。
+
+                    return new Response(responseBody, {
                         status: response.status,
                         statusText: response.statusText,
                         headers: responseHeaders
