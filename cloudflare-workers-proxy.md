@@ -160,18 +160,18 @@ async function handleRequest(request) {
     
     // 从KV存储中获取服务配置
     const serviceConfig = await SERVICE_CONFIGS.get(serviceKey, { type: 'json' })
-    if (!serviceConfig) {
+  if (!serviceConfig) {
       return new Response('服务配置不存在', { status: 404 })
-    }
-    
-    // 返回解密后的配置
+  }
+  
+  // 返回解密后的配置
     return new Response(JSON.stringify({
-      proxyURL: decryptURL(serviceConfig.encryptedProxyURL),
-      updateInterval: serviceConfig.updateInterval,
-      // 其他配置...
+    proxyURL: decryptURL(serviceConfig.encryptedProxyURL),
+    updateInterval: serviceConfig.updateInterval,
+    // 其他配置...
     }), {
       headers: { 'Content-Type': 'application/json' }
-    })
+  })
   }
   
   return new Response('Not Found', { status: 404 })
