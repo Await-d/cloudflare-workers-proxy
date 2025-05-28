@@ -16,77 +16,292 @@
 
 - GitHub 账户
 - Cloudflare 账户  
-- Cloudflare API Token
+- Cloudflare API Token（用于自动部署）
 
 ### 方法一：GitHub Actions 自动部署（推荐）
 
-#### 1. Fork 仓库
+#### 📋 步骤1：Fork 仓库
 
-1. 访问 [GitHub 仓库](https://github.com/Await-d/cloudflare-workers-proxy)
-2. 点击 "Fork" 按钮 Fork 到你的账户
+1. **访问GitHub仓库**：
+   - 打开 [https://github.com/Await-d/cloudflare-workers-proxy](https://github.com/Await-d/cloudflare-workers-proxy)
+   - 点击右上角的 **"Fork"** 按钮
+   - 选择你的GitHub账户作为目标
+   - 等待Fork完成
 
-#### 2. 设置 GitHub Secrets
+2. **克隆到本地（可选）**：
 
-在你的仓库中设置以下 Secrets（Settings > Secrets and Variables > Actions）：
+   ```bash
+   git clone https://github.com/你的用户名/cloudflare-workers-proxy.git
+   cd cloudflare-workers-proxy
+   ```
 
-```
-CLOUDFLARE_API_TOKEN=你的API Token
-CLOUDFLARE_ACCOUNT_ID=你的账户ID
-```
+#### 🔑 步骤2：获取Cloudflare凭证
 
-> **获取方法**：
->
-> - API Token: Cloudflare Dashboard > My Profile > API Tokens > Create Token
-> - Account ID: Cloudflare Dashboard 右侧边栏
+1. **获取API Token**：
+   - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
+   - 点击右上角头像 > **"My Profile"**
+   - 选择 **"API Tokens"** 标签
+   - 点击 **"Create Token"**
+   - 选择 **"Custom token"**
+   - 配置权限：
+     - **Account**: `Cloudflare Pages:Edit`
+     - **Zone**: `Zone:Read` (所有区域)
+     - **Account**: `Account:Read`
+   - 点击 **"Continue to summary"**
+   - 点击 **"Create Token"**
+   - **复制并安全保存Token**
 
-#### 3. 推送代码触发部署
+2. **获取Account ID**：
+   - 在Cloudflare Dashboard右侧边栏可以看到
+   - 或访问任意域名设置页面，URL中的ID即为Account ID
+   - 格式类似：`1234567890abcdef1234567890abcdef`
 
-```bash
-git push origin main
-```
+#### 🔧 步骤3：配置GitHub Secrets
 
-GitHub Actions 会自动部署到 Cloudflare Pages。
+1. **进入仓库设置**：
+   - 打开你Fork的仓库页面
+   - 点击 **"Settings"** 标签
+   - 在左侧菜单中选择 **"Secrets and variables"** > **"Actions"**
 
-#### 4. 配置客户端环境变量
+2. **添加Repository secrets**：
 
-部署完成后，在 Cloudflare Dashboard 的 Pages 项目设置中添加环境变量：
+   点击 **"New repository secret"** 添加以下两个秘钥：
 
-**方式一：连接服务端（推荐）**
+   **第一个秘钥**：
+   - Name: `CLOUDFLARE_API_TOKEN`
+   - Secret: `刚才获取的API Token`
+   - 点击 **"Add secret"**
 
-```
-SERVER_URL=https://cf-workers-proxy-server.pages.dev
-SECRET_KEY=your-secret-key
-SERVICE_KEY=my-service
-```
+   **第二个秘钥**：
+   - Name: `CLOUDFLARE_ACCOUNT_ID`
+   - Secret: `你的Cloudflare账户ID`
+   - 点击 **"Add secret"**
 
-**方式二：直接代理**
+#### 🚀 步骤4：触发自动部署
 
-```
-PROXY_URL=https://api.example.com
-UPDATE_INTERVAL=3600
-```
+1. **推送代码触发部署**：
 
-**可选配置**
+   ```bash
+   # 如果你克隆到本地，进行一次提交来触发部署
+   git commit --allow-empty -m "触发初始部署"
+   git push origin master
+   ```
 
-```
-DEBUG_MODE=false
-PROXY_CACHE_KV_ID=your-kv-namespace-id
-```
+   或者直接在GitHub网页上：
+   - 进入你的仓库
+   - 点击 **"Actions"** 标签
+   - 找到 **"Deploy to Cloudflare Pages"** 工作流
+   - 点击 **"Run workflow"** > **"Run workflow"**
 
-### 方法二：手动创建Pages项目
+2. **监控部署状态**：
+   - 在GitHub的 **"Actions"** 标签查看部署进度
+   - 绿色✅表示成功，红色❌表示失败
+   - 点击具体的workflow查看详细日志
 
-1. **创建Pages项目**：
-   - 登录 Cloudflare Dashboard > Pages
-   - 点击 "Create a project" > "Connect to Git"
-   - 选择你的GitHub仓库
-   - 项目名称：`cf-workers-proxy-new`
-   - 根目录：`/` （留空）
-   - 构建命令：留空
-   - 构建输出目录：留空
+3. **获取部署URL**：
+   - 部署成功后，在Actions日志中可以看到类似：
 
-2. **部署验证**：
-   - 访问：`https://cf-workers-proxy-new.pages.dev`
-   - 健康检查：`https://cf-workers-proxy-new.pages.dev/api/health`
+     ```
+     🎉 Your site is live at: https://cf-workers-proxy-new.pages.dev
+     ```
+
+### 方法二：手动创建Pages项目（备选方案）
+
+如果GitHub Actions遇到问题，可以手动创建Pages项目：
+
+#### 📋 详细步骤
+
+1. **登录Cloudflare Dashboard**：
+   - 访问 [https://dash.cloudflare.com](https://dash.cloudflare.com)
+   - 使用你的账户登录
+
+2. **进入Pages管理**：
+   - 在左侧菜单中点击 **"Workers & Pages"**
+   - 点击 **"Create application"**
+   - 选择 **"Pages"** 标签
+   - 点击 **"Connect to Git"**
+
+3. **连接GitHub仓库**：
+   - 如果首次使用，点击 **"Connect GitHub"**
+   - 授权Cloudflare访问你的GitHub仓库
+   - 在仓库列表中找到 `cloudflare-workers-proxy`
+   - 点击 **"Begin setup"**
+
+4. **配置项目设置**：
+
+   **基本设置**：
+   - **Project name**: `cf-workers-proxy-new`（或你喜欢的名称）
+   - **Production branch**: `master`
+
+   **构建设置**：
+   - **Framework preset**: `None`
+   - **Build command**: 留空（不填写）
+   - **Build output directory**: 留空（不填写）
+   - **Root directory**: 留空（或填写 `/`）
+
+   ⚠️ **重要提醒**：构建设置全部留空，因为我们使用Pages Functions，不需要构建步骤
+
+5. **完成创建**：
+   - 检查所有设置正确
+   - 点击 **"Save and Deploy"**
+   - 等待首次部署完成（通常1-3分钟）
+
+6. **验证部署**：
+   - 部署完成后会显示访问URL，如：`https://cf-workers-proxy-new.pages.dev`
+   - 访问该URL应该能看到代理服务首页
+
+#### 🔧 步骤5：配置客户端环境变量
+
+部署完成后，需要配置环境变量来连接服务端或设置直接代理：
+
+1. **进入项目设置**：
+   - 在Cloudflare Dashboard中找到你的Pages项目
+   - 点击项目名称进入详情页
+   - 点击 **"Settings"** 标签
+   - 选择 **"Environment variables"**
+
+2. **选择配置方式**：
+
+   **方式一：连接服务端（推荐）**
+
+   适用于需要动态配置管理的场景：
+
+   ```
+   变量名: SERVER_URL
+   值: https://cf-workers-proxy-server.pages.dev
+   环境: Production
+   
+   变量名: SECRET_KEY  
+   值: your-secret-key
+   环境: Production
+   
+   变量名: SERVICE_KEY
+   值: my-service
+   环境: Production
+   ```
+
+   **方式二：直接代理配置**
+
+   适用于简单的固定代理场景：
+
+   ```
+   变量名: PROXY_URL
+   值: https://api.example.com
+   环境: Production
+   
+   变量名: UPDATE_INTERVAL
+   值: 3600
+   环境: Production
+   ```
+
+3. **可选的高级配置**：
+
+   ```
+   变量名: DEBUG_MODE
+   值: false
+   环境: Production
+   说明: 开启调试模式显示更多日志
+   
+   变量名: PROXY_CACHE_KV_ID
+   值: your-kv-namespace-id
+   环境: Production
+   说明: 启用KV缓存以提高性能
+   ```
+
+4. **保存配置**：
+   - 添加每个环境变量后点击 **"Add variable"**
+   - 所有变量添加完成后，Pages会自动重新部署
+   - 等待重新部署完成（1-2分钟）
+
+#### ✅ 步骤6：验证客户端部署
+
+1. **访问基本页面**：
+
+   ```
+   https://cf-workers-proxy-new.pages.dev
+   ```
+
+   应该显示代理服务的状态页面
+
+2. **测试健康检查**：
+
+   ```
+   https://cf-workers-proxy-new.pages.dev/api/health
+   ```
+
+   应该返回JSON格式的健康状态
+
+3. **检查配置状态**：
+   在首页或健康检查中应该能看到：
+   - ✅ 代理配置状态
+   - ✅ 配置来源（服务端API 或 环境变量）
+   - ✅ KV缓存状态
+   - ✅ 调试模式状态
+
+4. **测试代理功能**：
+
+   ```bash
+   # 如果配置了直接代理
+   curl https://cf-workers-proxy-new.pages.dev/test-endpoint
+   
+   # 如果连接了服务端，需要先在服务端配置代理规则
+   ```
+
+### 🔍 常见问题和解决方案
+
+#### Q1: GitHub Actions部署失败
+
+**检查清单**：
+
+- [ ] API Token权限是否正确（需要Pages:Edit权限）
+- [ ] Account ID是否正确
+- [ ] Secrets是否正确添加到仓库
+- [ ] 是否有特殊字符导致解析错误
+
+**解决方案**：
+
+- 重新生成API Token并确保权限正确
+- 检查Account ID（32位十六进制字符串）
+- 删除并重新添加Secrets
+- 查看Actions日志的具体错误信息
+
+#### Q2: 手动部署后显示404
+
+**可能原因**：
+
+- 项目结构配置错误
+- 路由配置问题
+- Functions未正确识别
+
+**解决方案**：
+
+- 确保根目录设置为空或 `/`
+- 检查是否存在 `functions/` 目录和 `[[catchall]].js` 文件
+- 查看Pages的Functions标签页是否显示函数
+
+#### Q3: 环境变量不生效
+
+**检查步骤**：
+
+- 确认变量名拼写正确（大小写敏感）
+- 确认变量值没有多余的空格
+- 确认选择了正确的环境（Production/Preview）
+- 重新部署项目使变量生效
+
+#### Q4: 代理请求失败
+
+**排查步骤**：
+
+1. 检查目标URL是否可访问
+2. 启用DEBUG_MODE查看详细日志
+3. 检查CORS配置
+4. 验证服务端连接（如果使用服务端模式）
+
+### 🎯 下一步：部署服务端
+
+客户端部署完成后，如果选择了"连接服务端"模式，需要继续部署服务端以提供配置管理功能。
+
+请继续阅读本文档的 **"第二部分：服务端部署"** 章节。
 
 ## 🎯 第二部分：服务端部署（配置管理）
 
