@@ -89,6 +89,9 @@ export async function onRequest(context) {
         } else if (path === '/api/debug-direct') {
             // 直接测试目标服务器响应
             response = await handleDebugDirect(request, env);
+        } else if (path === '/api/test-bypass') {
+            // 测试最新绕过策略
+            response = await handleTestBypass(request, env);
         } else {
             // 所有其他请求都进行代理转发（包括根路径）
             response = await handleProxyRequest(request, env, ctx);
@@ -371,7 +374,7 @@ async function handleProxyRequest(request, env, ctx) {
                 createRequest: async () => {
                     const headers = new Headers();
                     // 多步骤访问：先访问根路径预热连接
-                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
                     headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8');
                     headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
                     headers.set('Cache-Control', 'max-age=0');
@@ -600,8 +603,6 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
                     headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
                     headers.set('Accept-Encoding', 'gzip, deflate, br');
-                    headers.set('Connection', 'keep-alive');
-                    headers.set('Upgrade-Insecure-Requests', '1');
                     headers.set('Sec-Fetch-Dest', 'document');
                     headers.set('Sec-Fetch-Mode', 'navigate');
                     headers.set('Sec-Fetch-Site', 'none');
@@ -1811,6 +1812,139 @@ async function handleDebugDirect(request, env) {
             'Content-Type': 'application/json'
         }
     });
+}
+
+/**
+ * 测试最新绕过策略
+ */
+async function handleTestBypass(request, env) {
+    try {
+        const config = await getServiceConfig(env);
+        if (!config) {
+            return new Response('配置未找到', {
+                status: 500
+            });
+        }
+
+        const targetUrl = new URL(config.proxyURL);
+
+        // 测试最有效的几种策略
+        const testStrategies = [
+            'sni_spoofing_simulation',
+            'http_1_downgrade',
+            'xff_forwarding_bypass',
+            'cf_ray_spoofing',
+            'accept_encoding_bypass'
+        ];
+
+        const results = [];
+
+        for (const strategyName of testStrategies) {
+            try {
+                const headers = new Headers();
+
+                switch (strategyName) {
+                    case 'sni_spoofing_simulation':
+                        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                        headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+                        headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+                        headers.set('Accept-Encoding', 'gzip, deflate, br');
+                        headers.set('Sec-Fetch-Dest', 'document');
+                        headers.set('Sec-Fetch-Mode', 'navigate');
+                        headers.set('Sec-Fetch-Site', 'none');
+                        headers.set('Sec-Fetch-User', '?1');
+                        break;
+                    case 'http_1_downgrade':
+                        headers.set('User-Agent', 'curl/7.68.0');
+                        headers.set('Accept', '*/*');
+                        headers.set('Connection', 'close');
+                        headers.set('Cache-Control', 'no-cache');
+                        headers.set('Pragma', 'no-cache');
+                        break;
+                    case 'xff_forwarding_bypass':
+                        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                        headers.set('Accept', '*/*');
+                        headers.set('X-Forwarded-For', '127.0.0.1, 192.168.1.1, ' + generateRandomIP());
+                        headers.set('X-Real-IP', '127.0.0.1');
+                        headers.set('X-Originating-IP', '127.0.0.1');
+                        headers.set('X-Forwarded-Host', 'localhost');
+                        break;
+                    case 'cf_ray_spoofing':
+                        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                        headers.set('Accept', '*/*');
+                        headers.set('CF-Ray', generateCfRay());
+                        headers.set('CF-Visitor', '{"scheme":"https"}');
+                        headers.set('CF-IPCountry', 'US');
+                        headers.set('CF-Connecting-IP', generateRandomIP());
+                        break;
+                    case 'accept_encoding_bypass':
+                        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                        headers.set('Accept', '*/*');
+                        headers.set('Accept-Encoding', '');
+                        headers.set('Accept-Charset', 'ISO-8859-1,utf-8;q=0.7,*;q=0.7');
+                        break;
+                }
+
+                const startTime = Date.now();
+
+                const proxyResponse = await fetch(targetUrl.toString(), {
+                    method: request.method,
+                    headers: headers,
+                    signal: AbortSignal.timeout(10000) // 10秒超时
+                });
+
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+
+                const result = {
+                    strategy: strategyName,
+                    status: proxyResponse.status,
+                    statusText: proxyResponse.statusText,
+                    responseTime: responseTime + 'ms',
+                    headers: Object.fromEntries(proxyResponse.headers.entries()),
+                    success: proxyResponse.ok,
+                    bodyPreview: await proxyResponse.text().then(text => text.substring(0, 200))
+                };
+
+                results.push(result);
+
+            } catch (error) {
+                results.push({
+                    strategy: strategyName,
+                    error: error.message,
+                    success: false
+                });
+            }
+        }
+
+        return new Response(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            target: targetUrl.toString(),
+            testResults: results,
+            summary: {
+                totalTests: results.length,
+                successful: results.filter(r => r.success).length,
+                failed: results.filter(r => !r.success).length
+            }
+        }, null, 2), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+
+    } catch (error) {
+        return new Response(JSON.stringify({
+            error: '测试绕过策略失败: ' + error.message,
+            timestamp: new Date().toISOString()
+        }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+    }
 }
 
 // 生成随机会话ID
