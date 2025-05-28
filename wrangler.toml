@@ -1,0 +1,35 @@
+name = "cloudflare-workers-proxy"
+compatibility_date = "2023-09-01"
+compatibility_flags = []
+
+# Pages 配置
+pages_build_output_dir = "./"
+
+# KV命名空间绑定
+[[kv_namespaces]]
+binding = "SERVICE_CONFIGS"
+id = "xxxx" # 需要替换为你的KV命名空间ID
+preview_id = "xxxx" # 需要替换为你的预览KV命名空间ID
+
+# 环境变量
+[vars]
+DEBUG_MODE = "false"
+MAX_REQUESTS_PER_MINUTE = "60"
+
+# 生产环境配置
+[env.production]
+vars = { 
+    MAX_REQUESTS_PER_MINUTE = "100",
+    DEBUG_MODE = "false"
+}
+# 密钥变量应通过 Cloudflare Dashboard 或 wrangler secret 设置：
+# SECRET_KEYS - 客户端访问密钥列表（逗号分隔）
+# ADMIN_KEY - 管理员密钥
+# ENCRYPTION_KEY - 配置加密密钥
+
+# 测试环境配置
+[env.staging]
+vars = { 
+    MAX_REQUESTS_PER_MINUTE = "30",
+    DEBUG_MODE = "true"
+} 

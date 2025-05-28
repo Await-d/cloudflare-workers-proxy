@@ -1,0 +1,25 @@
+{
+    "version": 1,
+    "include": [
+        "/api/*",
+        "/admin/*",
+        "/proxy/*",
+        "/"
+    ],
+    "exclude": [
+        "/public/*",
+        "/static/*",
+        "/*.ico",
+        "/*.png",
+        "/*.jpg",
+        "/*.jpeg",
+        "/*.gif",
+        "/*.svg",
+        "/*.css",
+        "/*.js",
+        "/*.woff",
+        "/*.woff2",
+        "/*.ttf",
+        "/*.eot"
+    ]
+}
