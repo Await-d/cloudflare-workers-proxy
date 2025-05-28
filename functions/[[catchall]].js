@@ -92,6 +92,9 @@ export async function onRequest(context) {
         } else if (path === '/api/test-bypass') {
             // 测试最新绕过策略
             response = await handleTestBypass(request, env);
+        } else if (path === '/api/bright-bypass') {
+            // 基于Bright Data方法的高级绕过策略  
+            response = await handleBrightBypass(request, env);
         } else if (path === '/api/advanced-bypass') {
             // 高级绕过技术测试，包括端口扫描和子域名发现
             response = await handleAdvancedBypassTest(request, env);
@@ -2270,4 +2273,361 @@ function generateCfRay() {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result + '-LAX';
+}
+
+/**
+ * 基于Bright Data方法的高级Cloudflare绕过策略
+ * 参考：https://github.com/bright-cn/bypass-cloudflare
+ */
+async function handleBrightBypass(request, env) {
+    try {
+        const config = await getServiceConfig(env);
+        if (!config) {
+            return new Response('配置未找到', {
+                status: 500
+            });
+        }
+
+        const targetUrl = new URL(config.proxyURL);
+
+        // 基于Bright Data文档的高级绕过策略
+        const brightStrategies = [{
+                name: 'realistic_chrome_fingerprint',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 完整的Chrome浏览器指纹模拟
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Cache-Control', 'max-age=0');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Sec-Fetch-User', '?1');
+                    headers.set('sec-ch-ua', '"Google Chrome";v="120", "Chromium";v="120", "Not:A-Brand";v="99"');
+                    headers.set('sec-ch-ua-mobile', '?0');
+                    headers.set('sec-ch-ua-platform', '"Windows"');
+                    headers.set('Referer', 'https://www.google.com/');
+                    // 模拟真实的来源
+                    headers.set('Origin', 'https://www.google.com');
+                    return headers;
+                }
+            },
+            {
+                name: 'firefox_mobile_fingerprint',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // Firefox移动端指纹模拟
+                    headers.set('User-Agent', 'Mozilla/5.0 (Mobile; rv:109.0) Gecko/109.0 Firefox/109.0');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
+                    headers.set('DNT', '1');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Sec-Fetch-User', '?1');
+                    headers.set('Referer', 'https://m.baidu.com/');
+                    return headers;
+                }
+            },
+            {
+                name: 'safari_mac_fingerprint',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // Safari macOS指纹模拟
+                    headers.set('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh-Hans;q=0.9');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Referer', 'https://www.apple.com/');
+                    return headers;
+                }
+            },
+            {
+                name: 'edge_windows_fingerprint',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // Microsoft Edge指纹模拟
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Cache-Control', 'max-age=0');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Sec-Fetch-User', '?1');
+                    headers.set('sec-ch-ua', '"Microsoft Edge";v="120", "Chromium";v="120", "Not:A-Brand";v="99"');
+                    headers.set('sec-ch-ua-mobile', '?0');
+                    headers.set('sec-ch-ua-platform', '"Windows"');
+                    headers.set('Referer', 'https://www.bing.com/');
+                    return headers;
+                }
+            },
+            {
+                name: 'api_client_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 模拟合法的API客户端
+                    headers.set('User-Agent', 'PostmanRuntime/7.35.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Postman-Token', generateRandomUUID());
+                    return headers;
+                }
+            },
+            {
+                name: 'curl_advanced_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 高级curl模拟，添加更多真实性
+                    headers.set('User-Agent', 'curl/8.4.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Connection', 'keep-alive');
+                    // 添加一些curl不常见但合法的头部
+                    headers.set('X-Request-ID', generateRandomRequestId());
+                    return headers;
+                }
+            },
+            {
+                name: 'http2_fingerprint_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 模拟HTTP/2特征的请求
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'en-US,en;q=0.5');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Pragma', 'no-cache');
+                    // HTTP/2 伪头部模拟（虽然在fetch中不能直接设置，但可以在一定程度上模拟行为）
+                    headers.set(':authority', targetUrl.host);
+                    headers.set(':method', 'GET');
+                    headers.set(':path', '/');
+                    headers.set(':scheme', targetUrl.protocol.slice(0, -1));
+                    return headers;
+                }
+            },
+            {
+                name: 'search_engine_bot_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 模拟搜索引擎爬虫（通常不被阻止）
+                    const bots = [
+                        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                        'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+                        'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+                        'Mozilla/5.0 (compatible; DuckDuckBot-Https/1.1; https://duckduckgo.com/duckduckbot)',
+                        'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)'
+                    ];
+                    const selectedBot = bots[Math.floor(Math.random() * bots.length)];
+                    headers.set('User-Agent', selectedBot);
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Language', 'en');
+                    return headers;
+                }
+            },
+            {
+                name: 'residential_proxy_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 模拟来自住宅代理的请求
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    // 伪造真实的住宅IP特征
+                    headers.set('X-Forwarded-For', generateResidentialIP());
+                    headers.set('X-Real-IP', generateResidentialIP());
+                    headers.set('Via', '1.1 residential-proxy');
+                    headers.set('Forwarded', `for=${generateResidentialIP()};proto=https`);
+                    return headers;
+                }
+            },
+            {
+                name: 'mobile_app_simulation',
+                createHeaders: () => {
+                    const headers = new Headers();
+                    // 模拟移动应用的网络请求
+                    headers.set('User-Agent', 'MyApp/1.0 (iPhone; iOS 17.1; Scale/3.00)');
+                    headers.set('Accept', 'application/json, text/plain, */*');
+                    headers.set('Accept-Language', 'zh-CN');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('X-App-Version', '1.2.3');
+                    headers.set('X-Platform', 'iOS');
+                    headers.set('X-Device-ID', generateRandomUUID());
+                    return headers;
+                }
+            }
+        ];
+
+        const results = [];
+
+        // 尝试每种策略
+        for (const strategy of brightStrategies) {
+            try {
+                const strategyHeaders = strategy.createHeaders();
+
+                // 复制原始请求的认证头部
+                const authHeaders = ['authorization', 'cookie', 'x-api-key', 'x-auth-token'];
+                for (const headerName of authHeaders) {
+                    const value = request.headers.get(headerName);
+                    if (value) {
+                        strategyHeaders.set(headerName, value);
+                    }
+                }
+
+                const startTime = Date.now();
+
+                const proxyResponse = await fetch(targetUrl.toString(), {
+                    method: request.method,
+                    headers: strategyHeaders,
+                    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+                    signal: AbortSignal.timeout(15000)
+                });
+
+                const responseTime = Date.now() - startTime;
+
+                const result = {
+                    strategy: strategy.name,
+                    status: proxyResponse.status,
+                    statusText: proxyResponse.statusText,
+                    responseTime: responseTime + 'ms',
+                    success: proxyResponse.ok && proxyResponse.status !== 403,
+                    headers: Object.fromEntries(strategyHeaders.entries()),
+                    responseHeaders: Object.fromEntries(proxyResponse.headers.entries())
+                };
+
+                results.push(result);
+
+                console.log(`Bright策略 ${strategy.name} 结果:`, {
+                    status: proxyResponse.status,
+                    success: result.success
+                });
+
+                // 如果成功，立即处理并返回响应
+                if (proxyResponse.ok && proxyResponse.status !== 403) {
+                    const responseHeaders = new Headers(proxyResponse.headers);
+
+                    // 添加CORS头部
+                    responseHeaders.set('Access-Control-Allow-Origin', '*');
+                    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+                    responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Service-Key, X-Requested-With');
+
+                    // 移除可能导致问题的头部
+                    responseHeaders.delete('content-security-policy');
+                    responseHeaders.delete('x-frame-options');
+                    responseHeaders.delete('content-encoding');
+                    responseHeaders.delete('content-length');
+                    responseHeaders.delete('transfer-encoding');
+
+                    // 添加成功标识
+                    responseHeaders.set('X-Bright-Strategy', strategy.name);
+                    responseHeaders.set('X-Bypass-Success', 'true');
+                    responseHeaders.set('X-Response-Time', responseTime + 'ms');
+
+                    return new Response(proxyResponse.body, {
+                        status: proxyResponse.status,
+                        statusText: proxyResponse.statusText,
+                        headers: responseHeaders
+                    });
+                }
+
+            } catch (error) {
+                results.push({
+                    strategy: strategy.name,
+                    error: error.message,
+                    success: false
+                });
+                console.log(`Bright策略 ${strategy.name} 失败:`, error.message);
+            }
+        }
+
+        // 所有策略都失败了
+        return new Response(JSON.stringify({
+            success: false,
+            message: '所有Bright Data启发的绕过策略都失败了',
+            originalTarget: config.proxyURL,
+            timestamp: new Date().toISOString(),
+            strategiesTested: results.length,
+            detailedResults: results,
+            summary: {
+                totalTests: results.length,
+                successful: results.filter(r => r.success).length,
+                failed: results.filter(r => !r.success).length
+            },
+            recommendations: [
+                '目标服务器的Cloudflare保护级别非常高',
+                '可能需要付费的专业绕过服务如Bright Data Web Unlocker',
+                '建议尝试使用真正的无头浏览器如Selenium或Playwright',
+                '考虑联系目标服务管理员获取白名单访问'
+            ]
+        }, null, 2), {
+            status: 502,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+
+    } catch (error) {
+        return new Response(JSON.stringify({
+            error: '基于Bright Data的绕过测试失败: ' + error.message,
+            timestamp: new Date().toISOString()
+        }), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+    }
+}
+
+// 生成随机UUID
+function generateRandomUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// 生成随机请求ID
+function generateRandomRequestId() {
+    return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+}
+
+// 生成住宅IP地址
+function generateResidentialIP() {
+    // 生成看起来像住宅的IP段
+    const ranges = [
+        [192, 168], // 本地网络
+        [10, 0], // 私有网络
+        [172, 16], // 私有网络
+        [203, 0], // 亚太地区
+        [115, 0], // 中国地区
+        [124, 0] // 亚洲地区
+    ];
+
+    const range = ranges[Math.floor(Math.random() * ranges.length)];
+    const third = Math.floor(Math.random() * 255);
+    const fourth = Math.floor(Math.random() * 254) + 1;
+
+    return `${range[0]}.${range[1]}.${third}.${fourth}`;
 }
