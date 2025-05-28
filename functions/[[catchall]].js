@@ -590,6 +590,135 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Content-Type', 'application/dns-message');
                     return headers;
                 }
+            },
+            {
+                name: 'sni_spoofing_simulation',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 模拟SNI欺骗 - 伪装成访问合法域名
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+                    headers.set('Accept-Encoding', 'gzip, deflate, br');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    headers.set('Sec-Fetch-Dest', 'document');
+                    headers.set('Sec-Fetch-Mode', 'navigate');
+                    headers.set('Sec-Fetch-Site', 'none');
+                    headers.set('Sec-Fetch-User', '?1');
+                    // 关键：不设置Host头，让系统自动处理
+                    // 这模拟了SNI欺骗的行为
+                    return headers;
+                }
+            },
+            {
+                name: 'http_1_downgrade',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // HTTP/1.1降级策略 - 某些Cloudflare保护可能只检查HTTP/2
+                    headers.set('User-Agent', 'curl/7.68.0');
+                    headers.set('Accept', '*/*');
+                    headers.set('Connection', 'close');
+                    headers.set('Cache-Control', 'no-cache');
+                    headers.set('Pragma', 'no-cache');
+                    // 强制HTTP/1.1
+                    return headers;
+                }
+            },
+            {
+                name: 'websocket_upgrade_attempt',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 尝试WebSocket升级绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Connection', 'Upgrade');
+                    headers.set('Upgrade', 'websocket');
+                    headers.set('Sec-WebSocket-Version', '13');
+                    headers.set('Sec-WebSocket-Key', btoa(Math.random().toString()).substr(0, 22) + '==');
+                    headers.set('Origin', 'https://example.com');
+                    return headers;
+                }
+            },
+            {
+                name: 'range_request_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // Range请求绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('Range', 'bytes=0-1024');
+                    headers.set('Accept-Encoding', 'identity');
+                    return headers;
+                }
+            },
+            {
+                name: 'cache_control_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 缓存控制绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+                    headers.set('Pragma', 'no-cache');
+                    headers.set('Expires', '0');
+                    headers.set('If-Modified-Since', 'Thu, 01 Jan 1970 00:00:00 GMT');
+                    return headers;
+                }
+            },
+            {
+                name: 'method_override_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // HTTP方法覆盖绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('X-HTTP-Method-Override', 'GET');
+                    headers.set('X-Method-Override', 'GET');
+                    headers.set('X-Original-Method', 'GET');
+                    return headers;
+                }
+            },
+            {
+                name: 'cf_ray_spoofing',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // 伪造Cloudflare Ray ID
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('CF-Ray', generateCfRay());
+                    headers.set('CF-Visitor', '{"scheme":"https"}');
+                    headers.set('CF-IPCountry', 'US');
+                    headers.set('CF-Connecting-IP', generateRandomIP());
+                    return headers;
+                }
+            },
+            {
+                name: 'xff_forwarding_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // X-Forwarded-For绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('X-Forwarded-For', '127.0.0.1, 192.168.1.1, ' + generateRandomIP());
+                    headers.set('X-Real-IP', '127.0.0.1');
+                    headers.set('X-Originating-IP', '127.0.0.1');
+                    headers.set('X-Forwarded-Host', 'localhost');
+                    headers.set('X-Remote-IP', '127.0.0.1');
+                    headers.set('X-Remote-Addr', '127.0.0.1');
+                    return headers;
+                }
+            },
+            {
+                name: 'accept_encoding_bypass',
+                createRequest: () => {
+                    const headers = new Headers();
+                    // Accept-Encoding绕过
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', ''); // 空的Accept-Encoding
+                    headers.set('Accept-Charset', 'ISO-8859-1,utf-8;q=0.7,*;q=0.7');
+                    return headers;
+                }
             }
         ];
 
