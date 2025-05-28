@@ -355,7 +355,19 @@ async function getServiceConfig(env) {
                 });
 
                 if (response.ok) {
-                    const config = await response.json();
+                    const responseData = await response.json();
+                    // 检查响应格式并提取实际配置数据
+                    let config;
+                    if (responseData.success && responseData.data) {
+                        // 服务端返回格式: { success: true, data: { proxyURL: "...", ... } }
+                        config = responseData.data;
+                    } else if (responseData.proxyURL) {
+                        // 直接返回配置格式: { proxyURL: "...", ... }
+                        config = responseData;
+                    } else {
+                        throw new Error('Invalid server response format');
+                    }
+
                     // 缓存到KV（如果可用）
                     await cacheConfig(env, config);
                     return config;
