@@ -91,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-minimal-proxy', // 版本标识
+        buildVersion: '2025-05-28-advanced-browser-simulation', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -282,7 +282,7 @@ function getConfigSourceName(source) {
 }
 
 /**
- * 处理代理请求（客户端功能）
+ * 处理代理请求（客户端功能）- 高级浏览器模拟版本
  */
 async function handleProxyRequest(request, env, ctx) {
     const url = new URL(request.url);
@@ -308,73 +308,164 @@ async function handleProxyRequest(request, env, ctx) {
         targetUrl.pathname = url.pathname;
         targetUrl.search = url.search;
 
-        // 复制原始请求头，但做最少的修改
-        const modifiedHeaders = new Headers(request.headers);
+        // 构建完整的浏览器请求头
+        const browserHeaders = new Headers();
 
-        // 只做必要的URL和Host修改
-        const targetHost = targetUrl.host;
+        // 标准浏览器请求头
+        browserHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        browserHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+        browserHeaders.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+        browserHeaders.set('Accept-Encoding', 'gzip, deflate, br');
+        browserHeaders.set('Cache-Control', 'max-age=0');
+        browserHeaders.set('Connection', 'keep-alive');
+        browserHeaders.set('Upgrade-Insecure-Requests', '1');
+        browserHeaders.set('Sec-Fetch-Dest', 'document');
+        browserHeaders.set('Sec-Fetch-Mode', 'navigate');
+        browserHeaders.set('Sec-Fetch-Site', 'none');
+        browserHeaders.set('Sec-Fetch-User', '?1');
+        browserHeaders.set('sec-ch-ua', '"Google Chrome";v="120", "Chromium";v="120", "Not:A-Brand";v="99"');
+        browserHeaders.set('sec-ch-ua-mobile', '?0');
+        browserHeaders.set('sec-ch-ua-platform', '"Windows"');
 
-        // 对于IP地址的特殊处理 - 尝试最简单的方法
-        if (/^\d+\.\d+\.\d+\.\d+/.test(targetUrl.hostname)) {
-            // 完全移除Host头，让fetch使用目标URL的host
-            modifiedHeaders.delete('Host');
-        } else {
-            // 对于域名，设置正确的Host头
-            modifiedHeaders.set('Host', targetHost);
+        // 尝试多种Host策略
+        const strategies = [{
+                name: 'domain_masking',
+                headers: () => {
+                    const headers = new Headers(browserHeaders);
+                    // 尝试使用一个看起来像真实域名的Host
+                    headers.set('Host', '1panel.example.com');
+                    headers.set('Referer', 'https://1panel.example.com/');
+                    headers.set('Origin', 'https://1panel.example.com');
+                    return headers;
+                }
+            },
+            {
+                name: 'localhost_masking',
+                headers: () => {
+                    const headers = new Headers(browserHeaders);
+                    // 尝试使用localhost
+                    headers.set('Host', 'localhost:' + targetUrl.port);
+                    headers.set('Referer', `http://localhost:${targetUrl.port}/`);
+                    return headers;
+                }
+            },
+            {
+                name: 'no_host',
+                headers: () => {
+                    const headers = new Headers(browserHeaders);
+                    // 完全不设置Host
+                    return headers;
+                }
+            },
+            {
+                name: 'minimal_headers',
+                headers: () => {
+                    const headers = new Headers();
+                    // 只使用最基本的头
+                    headers.set('User-Agent', 'curl/7.68.0');
+                    headers.set('Accept', '*/*');
+                    return headers;
+                }
+            }
+        ];
+
+        let lastError = null;
+        let debugInfo = [];
+
+        // 尝试不同的策略
+        for (const strategy of strategies) {
+            try {
+                const strategyHeaders = strategy.headers();
+
+                // 复制原始请求的重要头部（除了Host相关的）
+                const importantHeaders = ['authorization', 'content-type', 'x-api-key', 'x-auth-token'];
+                for (const headerName of importantHeaders) {
+                    const value = request.headers.get(headerName);
+                    if (value) {
+                        strategyHeaders.set(headerName, value);
+                    }
+                }
+
+                // 创建请求
+                const modifiedRequest = new Request(targetUrl.toString(), {
+                    method: request.method,
+                    headers: strategyHeaders,
+                    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
+                });
+
+                // 发送请求
+                const response = await fetch(modifiedRequest);
+
+                debugInfo.push({
+                    strategy: strategy.name,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(strategyHeaders.entries()),
+                    success: response.ok
+                });
+
+                // 如果成功，返回响应
+                if (response.ok) {
+                    const responseHeaders = new Headers(response.headers);
+
+                    // 移除可能导致问题的响应头
+                    responseHeaders.delete('content-encoding');
+                    responseHeaders.delete('content-length');
+                    responseHeaders.delete('transfer-encoding');
+
+                    // 添加调试信息到响应头（如果开启调试模式）
+                    if (env.DEBUG_MODE === 'true') {
+                        responseHeaders.set('X-Proxy-Strategy', strategy.name);
+                        responseHeaders.set('X-Proxy-Debug', JSON.stringify(debugInfo));
+                    }
+
+                    return new Response(response.body, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: responseHeaders
+                    });
+                }
+
+                lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+            } catch (error) {
+                debugInfo.push({
+                    strategy: strategy.name,
+                    error: error.message,
+                    success: false
+                });
+                lastError = error;
+            }
         }
 
-        // 只添加最基本的转发头
-        modifiedHeaders.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '');
-        modifiedHeaders.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
-        modifiedHeaders.set('X-Forwarded-Host', url.host);
+        // 所有策略都失败了
+        const errorDetails = {
+            error: 'All proxy strategies failed',
+            message: lastError ? lastError.message : 'Unknown error',
+            target: config.proxyURL,
+            timestamp: new Date().toISOString(),
+            strategiesTried: debugInfo.length
+        };
 
-        // 移除Cloudflare特有的头部
-        modifiedHeaders.delete('cf-ray');
-        modifiedHeaders.delete('cf-ipcountry');
-        modifiedHeaders.delete('cf-visitor');
-        modifiedHeaders.delete('cf-connecting-ip');
-
-        // 创建新的请求
-        const modifiedRequest = new Request(targetUrl.toString(), {
-            method: request.method,
-            headers: modifiedHeaders,
-            body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
-        });
-
-        // 转发请求
-        const response = await fetch(modifiedRequest);
-
-        // 如果开启调试模式且响应不成功，记录详细信息
-        if (env.DEBUG_MODE === 'true' && !response.ok) {
-            console.log('Target server error:', {
-                status: response.status,
-                statusText: response.statusText,
-                url: targetUrl.toString(),
-                requestHeaders: Object.fromEntries(modifiedHeaders.entries())
-            });
+        // 如果开启调试模式，添加详细信息
+        if (env.DEBUG_MODE === 'true') {
+            errorDetails.debugInfo = debugInfo;
+            errorDetails.targetHost = targetUrl.host;
+            errorDetails.requestMethod = request.method;
+            errorDetails.requestPath = url.pathname + url.search;
         }
 
-        // 创建新的响应，移除一些可能冲突的头
-        const responseHeaders = new Headers(response.headers);
-
-        // 移除可能导致问题的响应头
-        responseHeaders.delete('content-encoding');
-        responseHeaders.delete('content-length');
-        responseHeaders.delete('transfer-encoding');
-
-        const modifiedResponse = new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: responseHeaders
+        return new Response(JSON.stringify(errorDetails, null, 2), {
+            status: 502,
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
-
-        return modifiedResponse;
 
     } catch (error) {
         console.error('Proxy error:', error);
 
-        // 如果是fetch错误但有响应，尝试获取响应详情
-        let errorDetails = {
+        const errorDetails = {
             error: 'Proxy Error',
             message: error.message,
             target: config.proxyURL,
