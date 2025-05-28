@@ -27,26 +27,26 @@ export async function onRequest(context) {
 
         // 动态处理URL参数，覆盖环境变量设置 (借鉴epeius项目)
         if (url.searchParams.has('proxyip')) {
-            env.PROXY_URL = `http://${url.searchParams.get('proxyip')}`;
-            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+            env.PROXY_URL_OVERRIDE = `http://${url.searchParams.get('proxyip')}`;
+            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL_OVERRIDE}`);
         }
 
         if (url.searchParams.has('target')) {
-            env.PROXY_URL = url.searchParams.get('target');
-            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+            env.PROXY_URL_OVERRIDE = url.searchParams.get('target');
+            console.log(`URL参数覆盖PROXY_URL: ${env.PROXY_URL_OVERRIDE}`);
         }
 
         // 处理路径中的代理设置 (借鉴epeius项目)
         if (path.startsWith('/proxyip=')) {
             const proxyIP = path.split('/proxyip=')[1];
-            env.PROXY_URL = `http://${proxyIP}`;
-            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+            env.PROXY_URL_OVERRIDE = `http://${proxyIP}`;
+            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL_OVERRIDE}`);
         }
 
         if (path.startsWith('/target=')) {
             const target = path.split('/target=')[1];
-            env.PROXY_URL = target;
-            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL}`);
+            env.PROXY_URL_OVERRIDE = target;
+            console.log(`路径参数覆盖PROXY_URL: ${env.PROXY_URL_OVERRIDE}`);
         }
 
         // 添加 CORS 头
@@ -155,6 +155,9 @@ function getKVInfo(env) {
  * 获取配置来源
  */
 function getConfigSource(env) {
+    if (env.PROXY_URL_OVERRIDE) {
+        return 'url_parameter';
+    }
     if (env.SERVER_URL && env.SECRET_KEY && env.SERVICE_KEY) {
         return 'server_api';
     }
@@ -300,6 +303,7 @@ async function handleHomePage(request, env) {
  */
 function getConfigSourceName(source) {
     const names = {
+        'url_parameter': 'URL参数',
         'server_api': '服务端API',
         'environment_variable': '环境变量',
         'kv_storage': 'KV存储',
@@ -619,6 +623,17 @@ async function handleProxyRequest(request, env, ctx) {
  */
 async function getServiceConfig(env) {
     try {
+        // 首先检查是否有URL参数直接指定的代理配置
+        // 这些参数应该优先于所有其他配置
+        if (env.PROXY_URL_OVERRIDE) {
+            return {
+                proxyURL: env.PROXY_URL_OVERRIDE,
+                source: 'url_parameter',
+                updateInterval: parseInt(env.UPDATE_INTERVAL) || DEFAULT_CONFIG.updateInterval,
+                timestamp: new Date().toISOString()
+            };
+        }
+
         // 方式1: 从服务端API获取配置
         if (env.SERVER_URL && env.SECRET_KEY && env.SERVICE_KEY) {
             try {
@@ -643,6 +658,8 @@ async function getServiceConfig(env) {
                         throw new Error('Invalid server response format');
                     }
 
+                    config.source = 'server_api';
+
                     // 缓存到KV（如果可用）
                     await cacheConfig(env, config);
                     return config;
@@ -661,6 +678,7 @@ async function getServiceConfig(env) {
         // 方式2: 从KV存储获取配置
         const kvConfig = await getKVConfig(env);
         if (kvConfig) {
+            kvConfig.source = 'kv_storage';
             return kvConfig;
         }
 
@@ -668,6 +686,7 @@ async function getServiceConfig(env) {
         if (env.PROXY_URL) {
             return {
                 proxyURL: env.PROXY_URL,
+                source: 'environment_variable',
                 updateInterval: parseInt(env.UPDATE_INTERVAL) || DEFAULT_CONFIG.updateInterval,
                 timestamp: new Date().toISOString()
             };
