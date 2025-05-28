@@ -369,6 +369,61 @@ async function handleProxyRequest(request, env, ctx) {
                     headers.set('Accept', '*/*');
                     return headers;
                 }
+            },
+            {
+                name: 'firefox_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
+                    headers.set('DNT', '1');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    return headers;
+                }
+            },
+            {
+                name: 'python_requests',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'python-requests/2.28.1');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
+                    headers.set('Connection', 'keep-alive');
+                    return headers;
+                }
+            },
+            {
+                name: 'wget_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Wget/1.20.3 (linux-gnu)');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'identity');
+                    headers.set('Connection', 'Keep-Alive');
+                    return headers;
+                }
+            },
+            {
+                name: 'target_host_direct',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'no_special_headers',
+                headers: () => {
+                    const headers = new Headers();
+                    // 只保留最基础的头部，不包含任何可能被识别为代理的头部
+                    headers.set('Accept', 'text/html');
+                    return headers;
+                }
             }
         ];
 
@@ -806,6 +861,61 @@ async function handleDebugProxy(request, env, ctx) {
                     // 只使用最基本的头
                     headers.set('User-Agent', 'curl/7.68.0');
                     headers.set('Accept', '*/*');
+                    return headers;
+                }
+            },
+            {
+                name: 'firefox_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
+                    headers.set('Accept-Language', 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
+                    headers.set('DNT', '1');
+                    headers.set('Connection', 'keep-alive');
+                    headers.set('Upgrade-Insecure-Requests', '1');
+                    return headers;
+                }
+            },
+            {
+                name: 'python_requests',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'python-requests/2.28.1');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'gzip, deflate');
+                    headers.set('Connection', 'keep-alive');
+                    return headers;
+                }
+            },
+            {
+                name: 'wget_simulation',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Wget/1.20.3 (linux-gnu)');
+                    headers.set('Accept', '*/*');
+                    headers.set('Accept-Encoding', 'identity');
+                    headers.set('Connection', 'Keep-Alive');
+                    return headers;
+                }
+            },
+            {
+                name: 'target_host_direct',
+                headers: () => {
+                    const headers = new Headers();
+                    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+                    headers.set('Host', targetUrl.host);
+                    return headers;
+                }
+            },
+            {
+                name: 'no_special_headers',
+                headers: () => {
+                    const headers = new Headers();
+                    // 只保留最基础的头部，不包含任何可能被识别为代理的头部
+                    headers.set('Accept', 'text/html');
                     return headers;
                 }
             }
