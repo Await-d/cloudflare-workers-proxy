@@ -24,16 +24,23 @@ ENCRYPTION_KEY=your-encryption-key
 MAX_REQUESTS_PER_MINUTE=60
 ```
 
-### 3. 创建 KV 命名空间
+### 3. 创建和绑定 KV 命名空间
 
-```bash
-wrangler kv:namespace create "SERVICE_CONFIGS"
-```
+在 Cloudflare Dashboard 中：
 
-然后在 Pages 项目设置中绑定 KV 命名空间：
+1. **创建KV命名空间**：
+   - 进入 **Workers & Pages** > **KV**
+   - 点击 **"Create a namespace"**
+   - 命名空间名称：`SERVICE_CONFIGS`
+   - 点击 **"Add"**
 
-- 变量名：`SERVICE_CONFIGS`
-- KV 命名空间：选择刚创建的命名空间
+2. **绑定到Pages项目**：
+   - 回到你的服务端Pages项目设置
+   - 进入 **Settings** > **Functions**
+   - 在 **KV namespace bindings** 部分：
+     - 变量名：`SERVICE_CONFIGS`
+     - KV 命名空间：选择刚创建的 `SERVICE_CONFIGS`
+   - 点击 **"Save"**
 
 ### 4. 部署
 

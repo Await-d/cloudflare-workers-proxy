@@ -57,8 +57,9 @@ cloudflare-workers-proxy/
 
 📋 **部署文档**：
 
-- [自动部署指南](./DEPLOYMENT.md) - GitHub Actions自动部署
-- [手动部署指南](./MANUAL_DEPLOY.md) - 解决内部错误的备选方案
+- [客户端自动部署](./DEPLOYMENT.md) - GitHub Actions自动部署
+- [客户端手动部署](./MANUAL_DEPLOY.md) - 解决内部错误的备选方案
+- [服务端部署指南](./SERVER_DEPLOY.md) - 配置管理服务部署
 
 ### 方法一：GitHub Actions 自动部署（推荐）
 
