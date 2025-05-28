@@ -1,0 +1,22 @@
+{
+    "name": "cloudflare-workers-proxy-client",
+    "version": "1.0.0",
+    "description": "Cloudflare Pages + Functions代理转发服务",
+    "main": "functions/[[catchall]].js",
+    "scripts": {
+        "build": "echo 'No build step required'",
+        "dev": "wrangler pages dev ."
+    },
+    "keywords": [
+        "cloudflare",
+        "pages",
+        "functions",
+        "proxy",
+        "workers"
+    ],
+    "author": "Await",
+    "license": "MIT",
+    "devDependencies": {
+        "wrangler": "^3.0.0"
+    }
+}

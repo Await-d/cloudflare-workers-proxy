@@ -20,8 +20,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: cloudflare-workers-proxy-client
-          directory: "."
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          # Pages Functions 自动检测 _worker.js 文件
+          projectName: cf-workers-proxy
+          directory: .
+          # Pages Functions位于 functions/ 目录
           # 环境变量在 Cloudflare Dashboard Pages 设置页面配置 
