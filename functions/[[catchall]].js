@@ -88,6 +88,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
+        buildVersion: '2025-05-28-fix-config-parsing', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -97,7 +98,9 @@ async function handleHealthCheck(request, env) {
             hasProxyUrl: !!env.PROXY_URL,
             hasKV: kvInfo.available,
             debugMode: env.DEBUG_MODE === 'true'
-        }
+        },
+        // 调试信息：显示实际配置数据
+        configDebug: env.DEBUG_MODE === 'true' ? config : undefined
     }), {
         headers: {
             'Content-Type': 'application/json'
