@@ -91,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-enhance-headers', // 版本标识
+        buildVersion: '2025-05-28-debug-enhanced', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -368,6 +368,16 @@ async function handleProxyRequest(request, env, ctx) {
         // 转发请求
         const response = await fetch(modifiedRequest);
 
+        // 如果开启调试模式且响应不成功，记录详细信息
+        if (env.DEBUG_MODE === 'true' && !response.ok) {
+            console.log('Target server error:', {
+                status: response.status,
+                statusText: response.statusText,
+                url: targetUrl.toString(),
+                requestHeaders: Object.fromEntries(modifiedHeaders.entries())
+            });
+        }
+
         // 创建新的响应，移除一些可能冲突的头
         const responseHeaders = new Headers(response.headers);
 
@@ -386,12 +396,26 @@ async function handleProxyRequest(request, env, ctx) {
 
     } catch (error) {
         console.error('Proxy error:', error);
-        return new Response(JSON.stringify({
+
+        // 如果是fetch错误但有响应，尝试获取响应详情
+        let errorDetails = {
             error: 'Proxy Error',
             message: error.message,
             target: config.proxyURL,
             timestamp: new Date().toISOString()
-        }), {
+        };
+
+        // 如果开启调试模式，添加更多信息
+        if (env.DEBUG_MODE === 'true') {
+            errorDetails.debugInfo = {
+                requestUrl: url.pathname + url.search,
+                targetHost: new URL(config.proxyURL).host,
+                requestMethod: request.method,
+                errorStack: error.stack
+            };
+        }
+
+        return new Response(JSON.stringify(errorDetails), {
             status: 502,
             headers: {
                 'Content-Type': 'application/json'
