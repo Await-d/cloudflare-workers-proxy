@@ -53,14 +53,9 @@ cloudflare-workers-proxy/
 
 ### 📋 部署文档
 
-#### 客户端部署（代理转发）
-
-- [📘 自动部署指南](./DEPLOYMENT.md) - GitHub Actions自动部署（推荐）
-- [📗 手动部署指南](./MANUAL_DEPLOY.md) - 解决内部错误的备选方案
-
-#### 服务端部署（配置管理）
-
-- [📕 服务端部署指南](./SERVER_DEPLOY.md) - 完整的服务端部署步骤
+- [📘 完整部署指南](./DEPLOYMENT.md) - 客户端+服务端一站式部署
+- [🔧 故障排除指南](./TROUBLESHOOTING.md) - 问题解决和手动部署
+- [📋 项目设计文档](./docs/design.md) - 开发者技术文档
 
 ### 🎯 部署概览
 
