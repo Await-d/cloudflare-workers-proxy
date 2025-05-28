@@ -91,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-debug-enhanced', // 版本标识
+        buildVersion: '2025-05-28-remove-host-header', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -322,13 +322,13 @@ async function handleProxyRequest(request, env, ctx) {
             // 3. 或者设置为IP:port
 
             // 策略1：保持原始域名作为Host头（适用于反向代理场景）
-            modifiedHeaders.set('Host', url.host);
+            // modifiedHeaders.set('Host', url.host);
 
             // 策略2：设置为目标IP和端口
             // modifiedHeaders.set('Host', targetHost);
 
             // 策略3：移除Host头（某些情况下有效）
-            // modifiedHeaders.delete('Host');
+            modifiedHeaders.delete('Host');
         } else {
             // 对于域名，设置正确的Host头
             modifiedHeaders.set('Host', targetHost);
