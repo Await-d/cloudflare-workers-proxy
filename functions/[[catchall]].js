@@ -88,7 +88,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-fix-proxy-routing', // 版本标识
+        buildVersion: '2025-05-28-fix-ip-access', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -305,26 +305,65 @@ async function handleProxyRequest(request, env, ctx) {
         targetUrl.pathname = url.pathname;
         targetUrl.search = url.search;
 
+        // 复制原始请求头
+        const modifiedHeaders = new Headers(request.headers);
+
+        // 处理Host头 - 对于IP访问的特殊处理
+        const targetHost = targetUrl.host;
+
+        // 如果目标是IP地址，尝试不同的Host头策略
+        if (/^\d+\.\d+\.\d+\.\d+/.test(targetUrl.hostname)) {
+            // 对于IP地址，可以尝试以下策略：
+            // 1. 保持原始Host头（用户访问的域名）
+            // 2. 或者移除Host头让服务器使用默认
+            // 3. 或者设置为IP:port
+
+            // 策略1：保持原始域名作为Host头（适用于反向代理场景）
+            // modifiedHeaders.set('Host', url.host);
+
+            // 策略2：设置为目标IP和端口
+            modifiedHeaders.set('Host', targetHost);
+
+            // 策略3：移除Host头（某些情况下有效）
+            // modifiedHeaders.delete('Host');
+        } else {
+            // 对于域名，设置正确的Host头
+            modifiedHeaders.set('Host', targetHost);
+        }
+
+        // 添加一些可能有用的头部
+        modifiedHeaders.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '');
+        modifiedHeaders.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
+        modifiedHeaders.set('X-Forwarded-Host', url.host);
+
+        // 移除可能导致问题的头部
+        modifiedHeaders.delete('cf-ray');
+        modifiedHeaders.delete('cf-ipcountry');
+        modifiedHeaders.delete('cf-visitor');
+
         // 创建新的请求
         const modifiedRequest = new Request(targetUrl.toString(), {
             method: request.method,
-            headers: request.headers,
-            body: request.body
+            headers: modifiedHeaders,
+            body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
         });
 
         // 转发请求
         const response = await fetch(modifiedRequest);
 
         // 创建新的响应，移除一些可能冲突的头
+        const responseHeaders = new Headers(response.headers);
+
+        // 移除可能导致问题的响应头
+        responseHeaders.delete('content-encoding');
+        responseHeaders.delete('content-length');
+        responseHeaders.delete('transfer-encoding');
+
         const modifiedResponse = new Response(response.body, {
             status: response.status,
             statusText: response.statusText,
-            headers: response.headers
+            headers: responseHeaders
         });
-
-        // 移除可能导致问题的头
-        modifiedResponse.headers.delete('content-encoding');
-        modifiedResponse.headers.delete('content-length');
 
         return modifiedResponse;
 
@@ -333,7 +372,8 @@ async function handleProxyRequest(request, env, ctx) {
         return new Response(JSON.stringify({
             error: 'Proxy Error',
             message: error.message,
-            target: config.proxyURL
+            target: config.proxyURL,
+            timestamp: new Date().toISOString()
         }), {
             status: 502,
             headers: {
