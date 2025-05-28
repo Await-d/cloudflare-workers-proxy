@@ -91,7 +91,7 @@ async function handleHealthCheck(request, env) {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        buildVersion: '2025-05-28-add-target-test', // 版本标识
+        buildVersion: '2025-05-28-enhance-headers', // 版本标识
         service: 'cloudflare-workers-proxy-client',
         config: config ? 'loaded' : 'not_configured',
         configSource: getConfigSource(env),
@@ -338,6 +338,20 @@ async function handleProxyRequest(request, env, ctx) {
         modifiedHeaders.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '');
         modifiedHeaders.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
         modifiedHeaders.set('X-Forwarded-Host', url.host);
+
+        // 添加标准浏览器头部
+        if (!modifiedHeaders.has('User-Agent')) {
+            modifiedHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        }
+        if (!modifiedHeaders.has('Accept')) {
+            modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8');
+        }
+        if (!modifiedHeaders.has('Accept-Language')) {
+            modifiedHeaders.set('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+        }
+        if (!modifiedHeaders.has('Accept-Encoding')) {
+            modifiedHeaders.set('Accept-Encoding', 'gzip, deflate');
+        }
 
         // 移除可能导致问题的头部
         modifiedHeaders.delete('cf-ray');
